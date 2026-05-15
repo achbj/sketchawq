@@ -1,5 +1,5 @@
 model:
-  repo_id: Qwen/Qwen3-1.7B-Base
+  repo_id: Qwen/Qwen3-4B
   dtype: float16
   trust_remote_code: false
   local_files_only: false

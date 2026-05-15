@@ -2,6 +2,9 @@
 
 This is the cleaned project layout for SketchAWQ. The old checkout is still useful as an experiment archive; this folder is the codebase we should develop from.
 
+For the current result coverage, robustness checks, caveats, and next-step
+roadmap, see [docs/project_status_roadmap.md](docs/project_status_roadmap.md).
+
 SketchAWQ is a post-training quantization pipeline that adds lightweight Hessian sketch signals to AWQ-style scaling. Current packed exports use `sketchawq-packed-v1`; throughput numbers are still dense dequantized simulation until a packed inference kernel is added.
 
 ## Layout
