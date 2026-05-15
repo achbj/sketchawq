@@ -9,6 +9,7 @@ Download paper-eval run artifacts from the Modal volume and build comparison tab
 
 Models:
   qwen2_5_1_5b
+  qwen3_1_7b
   qwen3_4b
   qwen3_8b
   qwen3_14b
@@ -31,6 +32,7 @@ Environment:
 
 Examples:
   scripts/sync_paper_eval_results.sh qwen3_8b both --method both --eval c4
+  scripts/sync_paper_eval_results.sh qwen3_1_7b both --method both
   scripts/sync_paper_eval_results.sh qwen3_8b both --method both
   scripts/sync_paper_eval_results.sh qwen3_8b 3 --method both --dry-run
   MODAL_BIN=/Users/achbj/miniconda3/envs/modal/bin/modal scripts/sync_paper_eval_results.sh qwen3_8b both
@@ -45,6 +47,7 @@ die() {
 normalize_model() {
   case "${1//-/_}" in
     qwen2|qwen25|qwen2_5|qwen2_5_1_5b) echo "qwen2_5_1_5b" ;;
+    qwen3_1_7b|qwen3_1_7|qwen3_17b|qwen3_17) echo "qwen3_1_7b" ;;
     qwen3_4b|qwen3_4) echo "qwen3_4b" ;;
     qwen3_8b|qwen3_8) echo "qwen3_8b" ;;
     qwen3_14b|qwen3_14) echo "qwen3_14b" ;;
@@ -88,6 +91,8 @@ sketchawq_config() {
     c4:*) die "no C4 SketchAWQ eval config for $1 $2-bit" ;;
     wikitext:qwen2_5_1_5b:3) echo "configs/paper/qwen2_5_1_5b_3bit.yaml" ;;
     wikitext:qwen2_5_1_5b:4) echo "configs/paper/qwen2_5_1_5b_4bit.yaml" ;;
+    wikitext:qwen3_1_7b:3) echo "configs/paper/qwen3_1_7b_3bit.yaml" ;;
+    wikitext:qwen3_1_7b:4) echo "configs/paper/qwen3_1_7b_4bit.yaml" ;;
     wikitext:qwen3_4b:3) echo "configs/paper/qwen3_4b_3bit.yaml" ;;
     wikitext:qwen3_4b:4) echo "configs/paper/qwen3_4b_4bit.yaml" ;;
     wikitext:qwen3_8b:3) echo "configs/paper/qwen3_8b_3bit.yaml" ;;
@@ -109,6 +114,8 @@ gptq_config() {
     c4:*) die "no C4 GPTQ eval config for $1 $2-bit" ;;
     wikitext:qwen2_5_1_5b:3) echo "configs/baselines/qwen2_5_1_5b_gptq_3bit.yaml" ;;
     wikitext:qwen2_5_1_5b:4) echo "configs/baselines/qwen2_5_1_5b_gptq_4bit.yaml" ;;
+    wikitext:qwen3_1_7b:3) echo "configs/baselines/qwen3_1_7b_gptq_3bit.yaml" ;;
+    wikitext:qwen3_1_7b:4) echo "configs/baselines/qwen3_1_7b_gptq_4bit.yaml" ;;
     wikitext:qwen3_4b:3) echo "configs/baselines/qwen3_4b_gptq_3bit.yaml" ;;
     wikitext:qwen3_4b:4) echo "configs/baselines/qwen3_4b_gptq_4bit.yaml" ;;
     wikitext:qwen3_8b:3) echo "configs/baselines/qwen3_8b_gptq_3bit.yaml" ;;

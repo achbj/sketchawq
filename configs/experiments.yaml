@@ -26,6 +26,13 @@ targets:
       - configs/paper/qwen3_4b_3bit.yaml
       - configs/paper/qwen3_4b_4bit.yaml
 
+  paper-qwen3-1-7b:
+    description: Canonical Qwen3 1.7B SketchAWQ rows.
+    runner: sketchawq
+    configs:
+      - configs/paper/qwen3_1_7b_3bit.yaml
+      - configs/paper/qwen3_1_7b_4bit.yaml
+
   paper-qwen3-8b:
     description: Canonical Qwen3 8B SketchAWQ rows.
     runner: sketchawq
@@ -67,6 +74,13 @@ targets:
     configs:
       - configs/baselines/qwen3_4b_gptq_3bit.yaml
       - configs/baselines/qwen3_4b_gptq_4bit.yaml
+
+  baseline-qwen3-1-7b:
+    description: Qwen3 1.7B GPTQ paper-eval rows.
+    runner: baseline
+    configs:
+      - configs/baselines/qwen3_1_7b_gptq_3bit.yaml
+      - configs/baselines/qwen3_1_7b_gptq_4bit.yaml
 
   baseline-qwen3-8b:
     description: Qwen3 8B GPTQ paper-eval rows.

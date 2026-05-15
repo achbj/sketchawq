@@ -16,8 +16,9 @@ what to do next without overfitting the method to one final benchmark board.
   baseline configs live under `configs/baselines/`.
 - The current synced artifacts in this checkout cover Qwen3-4B and Qwen3-8B.
   Qwen3-8B also has a later C4 validation board intended as a robustness check.
-- Qwen3-32B configs are present for both methods and both bit widths, but no
-  synced Qwen3-32B artifact summaries are present in this clean checkout yet.
+- Qwen3-1.7B and Qwen3-32B configs are present for both methods and both bit
+  widths, but no synced artifact summaries for those models are present in this
+  clean checkout yet.
 
 ## Current Outcomes
 
@@ -27,6 +28,8 @@ the clean checkout only.
 
 | Model | Eval board | Bits | SketchAWQ PPL | GPTQ PPL | SketchAWQ time | GPTQ time | Status |
 | --- | --- | ---: | ---: | ---: | ---: | ---: | --- |
+| Qwen3-1.7B | WikiText2 validation 2048 | 3 | Not synced | Not synced | Not synced | Not synced | Configured, needs run/sync |
+| Qwen3-1.7B | WikiText2 validation 2048 | 4 | Not synced | Not synced | Not synced | Not synced | Configured, needs run/sync |
 | Qwen3-4B | WikiText2 validation 2048 | 3 | 16.535 | 16.938 | 222.07s | 1011.99s | Quality win, about 4.6x faster |
 | Qwen3-4B | WikiText2 validation 2048 | 4 | 15.303 | 14.847 | 167.63s | 1083.78s | Speed win, quality gap |
 | Qwen3-8B | WikiText2 validation 2048 | 3 | 11.367 | 11.807 | 185.53s | 1094.62s | Quality win, about 5.9x faster |
@@ -42,7 +45,7 @@ Coverage notes:
   calibration with WikiText evaluation, plus a separate C4 validation board.
 - Qwen3-32B uses C4 calibration and WikiText evaluation in config, but the
   actual 32B artifact rows are not synced into this clean folder.
-- Qwen2.5, LLaMA-2 7B, and Qwen3-14B paper rows are represented by configs in
+- Qwen2.5, Qwen3-14B, and LLaMA-2 7B paper rows are represented by configs in
   this clean checkout, but their synced summary artifacts are not present here.
 
 ## Known Caveats
@@ -97,8 +100,9 @@ Decision rules:
       GPTQ, then add the rows to this document.
 - [ ] Decide whether Qwen3-32B also needs a C4 validation board matching the
       Qwen3-8B robustness check.
-- [ ] Bring Qwen2.5, LLaMA-2 7B, and Qwen3-14B synced summaries into the clean
-      checkout only if they are still part of the active paper table.
+- [ ] Bring Qwen2.5, Qwen3-1.7B, Qwen3-14B, and LLaMA-2 7B synced summaries
+      into the clean checkout only if they are still part of the active paper
+      table.
 
 ### Step 2: Freeze A Trustworthy Baseline Table
 

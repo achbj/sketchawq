@@ -18,6 +18,14 @@ PAPER_EVAL_CONFIGS = {
         "configs/paper/qwen2_5_1_5b_4bit.yaml",
         "configs/baselines/qwen2_5_1_5b_gptq_4bit.yaml",
     ),
+    ("qwen3_1_7b", 3): (
+        "configs/paper/qwen3_1_7b_3bit.yaml",
+        "configs/baselines/qwen3_1_7b_gptq_3bit.yaml",
+    ),
+    ("qwen3_1_7b", 4): (
+        "configs/paper/qwen3_1_7b_4bit.yaml",
+        "configs/baselines/qwen3_1_7b_gptq_4bit.yaml",
+    ),
     ("qwen3_4b", 3): (
         "configs/paper/qwen3_4b_3bit.yaml",
         "configs/baselines/qwen3_4b_gptq_3bit.yaml",
@@ -73,6 +81,7 @@ QWEN3_8B_C4_EVAL_CONFIGS = {
 
 
 def test_every_model_bit_has_valid_sketchawq_and_gptq_configs() -> None:
+    seen_run_names: set[str] = set()
     for sketchawq_config, gptq_config in PAPER_EVAL_CONFIGS.values():
         sketchawq = load_config(PROJECT_ROOT / sketchawq_config)
         baseline = load_baseline_config(PROJECT_ROOT / gptq_config)
@@ -98,6 +107,10 @@ def test_every_model_bit_has_valid_sketchawq_and_gptq_configs() -> None:
         assert baseline.evaluation.benchmark_name.startswith("wikitext2_validation")
         assert baseline.evaluation.max_batches in {64, 128}
         assert baseline.evaluation.measure_throughput
+        assert sketchawq.output.run_name not in seen_run_names
+        seen_run_names.add(sketchawq.output.run_name)
+        assert baseline.output.run_name not in seen_run_names
+        seen_run_names.add(baseline.output.run_name)
 
 
 def test_qwen3_8b_c4_eval_configs_match_across_methods() -> None:
@@ -165,6 +178,21 @@ def test_generic_script_can_dry_run_both_methods_locally() -> None:
     )
 
 
+def test_generic_script_can_dry_run_qwen3_1_7b_both_methods() -> None:
+    script = PROJECT_ROOT / "scripts" / "run_paper_eval.sh"
+
+    result = subprocess.run(
+        [str(script), "qwen3_1_7b", "3", "--method", "both", "--dry-run"],
+        cwd=PROJECT_ROOT,
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+
+    assert "configs/paper/qwen3_1_7b_3bit.yaml" in result.stdout
+    assert "configs/baselines/qwen3_1_7b_gptq_3bit.yaml" in result.stdout
+
+
 def test_generic_script_can_dry_run_modal_gpu_override() -> None:
     script = PROJECT_ROOT / "scripts" / "run_paper_eval.sh"
 
@@ -227,6 +255,24 @@ def test_sync_results_script_dry_runs_qwen3_8b_both_bits_and_methods() -> None:
     assert "sketchawq.experiments.compare_methods" in result.stdout
     assert "sketchawq.experiments.plot_benchmark_board" in result.stdout
     assert "qwen3_8b_3_4bit_paper_eval_summary.csv" in result.stdout
+
+
+def test_sync_results_script_dry_runs_qwen3_1_7b_both_bits_and_methods() -> None:
+    script = PROJECT_ROOT / "scripts" / "sync_paper_eval_results.sh"
+
+    result = subprocess.run(
+        [str(script), "qwen3_1_7b", "both", "--method", "both", "--dry-run"],
+        cwd=PROJECT_ROOT,
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+
+    assert "modal volume get --force sketchawq-artifacts /qwen3_1_7b_3bit_qwen_final_packed_eval2048" in result.stdout
+    assert "modal volume get --force sketchawq-artifacts /qwen3_1_7b_gptq_3bit_eval2048" in result.stdout
+    assert "modal volume get --force sketchawq-artifacts /qwen3_1_7b_4bit_qwen_final_packed_eval2048" in result.stdout
+    assert "modal volume get --force sketchawq-artifacts /qwen3_1_7b_gptq_4bit_eval2048" in result.stdout
+    assert "qwen3_1_7b_3_4bit_paper_eval_summary.csv" in result.stdout
 
 
 def test_sync_results_script_can_skip_plot_generation() -> None:

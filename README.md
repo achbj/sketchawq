@@ -37,6 +37,7 @@ Run a named target from the catalog:
 ```bash
 sketchawq run-target smoke
 sketchawq run-target paper-qwen2
+sketchawq run-target paper-qwen3-1-7b
 sketchawq run-target paper-qwen3-14b
 sketchawq run-target paper-qwen3-32b
 ```
@@ -45,6 +46,7 @@ Run an external baseline config:
 
 ```bash
 sketchawq baseline configs/baselines/qwen2_5_1_5b_gptq_4bit.yaml
+sketchawq run-target baseline-qwen3-1-7b
 sketchawq run-target baseline-qwen3-14b
 sketchawq run-target baseline-qwen3-32b
 ```
