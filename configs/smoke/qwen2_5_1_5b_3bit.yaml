@@ -1,0 +1,55 @@
+model:
+  repo_id: Qwen/Qwen2.5-1.5B
+  dtype: float16
+  trust_remote_code: false
+  local_files_only: false
+
+quantization:
+  bits: 3
+  group_size: 128
+  symmetric: true
+  awq_alpha_candidates: [0.0, 0.25, 0.5, 0.75]
+  clip_candidates: [1.0, 0.95, 0.9]
+
+sketch:
+  enabled: true
+  mode: diagonal_low_rank
+  rank: 4
+  max_rows_per_batch: 128
+  diagonal_floor: 0.000001
+  low_rank_weight: 0.15
+
+calibration:
+  source: dataset
+  dataset_name: wikitext
+  dataset_config: wikitext-2-raw-v1
+  split: train
+  text_column: text
+  num_samples: 16
+  sequence_length: 1024
+  seed: 42
+
+evaluation:
+  enabled: true
+  compare_original: true
+  benchmark_name: wikitext2_validation
+  use_calibration_data: false
+  source: dataset
+  dataset_name: wikitext
+  dataset_config: wikitext-2-raw-v1
+  split: validation
+  text_column: text
+  num_samples: 32
+  sequence_length: 1024
+  max_batches: 4
+  measure_throughput: true
+
+output:
+  run_name: qwen2_5_1_5b_3bit_smoke
+  output_dir: artifacts
+  save_model: true
+
+runtime:
+  device: auto
+  seed: 42
+  log_level: INFO

@@ -1,0 +1,66 @@
+model:
+  repo_id: Qwen/Qwen3-4B
+  dtype: float16
+  trust_remote_code: false
+  local_files_only: false
+
+quantization:
+  bits: 4
+  group_size: 128
+  symmetric: true
+  scale_clip_search: greedy
+  awq_alpha_candidates: [0.0, 0.1, 0.2, 0.3]
+  clip_candidates: [0.93, 0.9, 0.87, 0.85]
+
+outliers:
+  enabled: true
+  strategy: protect
+  metric: hessian_weight
+  fraction: 0.040
+  protected_bits: 16
+
+sketch:
+  enabled: true
+  mode: diagonal_low_rank
+  rank: 8
+  max_rows_per_batch: 128
+  diagonal_floor: 0.000001
+  low_rank_weight: 0.15
+  normalize_error_terms: false
+
+calibration:
+  source: dataset
+  dataset_name: allenai/c4
+  dataset_config: en
+  split: train
+  text_column: text
+  num_samples: 256
+  sequence_length: 2048
+  seed: 42
+  packing: true
+
+evaluation:
+  enabled: true
+  compare_original: true
+  benchmark_name: wikitext2_validation_packed_eval2048
+  use_calibration_data: false
+  source: dataset
+  dataset_name: wikitext
+  dataset_config: wikitext-2-raw-v1
+  split: validation
+  text_column: text
+  num_samples: 64
+  sequence_length: 2048
+  packing: true
+  max_batches: 64
+  measure_throughput: true
+
+output:
+  run_name: qwen3_4b_4bit_qwen_final_packed_eval2048
+  output_dir: artifacts
+  save_model: false
+
+runtime:
+  device: auto
+  seed: 42
+  log_level: INFO

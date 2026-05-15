@@ -1,0 +1,44 @@
+model:
+  repo_id: sshleifer/tiny-gpt2
+  dtype: float32
+  trust_remote_code: false
+  local_files_only: false
+
+quantization:
+  bits: 4
+  group_size: 32
+  symmetric: true
+  awq_alpha_candidates: [0.0, 0.25, 0.5, 0.75]
+  clip_candidates: [1.0, 0.95, 0.9, 0.85]
+
+sketch:
+  enabled: true
+  mode: diagonal_low_rank
+  rank: 4
+  max_rows_per_batch: 64
+  diagonal_floor: 0.000001
+  low_rank_weight: 0.15
+
+calibration:
+  source: synthetic
+  num_samples: 4
+  sequence_length: 64
+  seed: 42
+
+evaluation:
+  enabled: true
+  compare_original: true
+  benchmark_name: synthetic_debug
+  use_calibration_data: true
+  max_batches: 2
+  measure_throughput: false
+
+output:
+  run_name: tiny_debug_sketchawq
+  output_dir: artifacts
+  save_model: false
+
+runtime:
+  device: auto
+  seed: 42
+  log_level: INFO

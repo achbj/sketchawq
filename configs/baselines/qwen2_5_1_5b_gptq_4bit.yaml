@@ -1,0 +1,52 @@
+method:
+  name: gptq
+  label: GPTQModel-GPTQ
+  calibration_batch_size: 1
+
+model:
+  repo_id: Qwen/Qwen2.5-1.5B
+  dtype: float16
+  trust_remote_code: false
+  local_files_only: false
+
+quantization:
+  bits: 4
+  group_size: 128
+  symmetric: true
+
+calibration:
+  source: dataset
+  dataset_name: wikitext
+  dataset_config: wikitext-2-raw-v1
+  split: train
+  text_column: text
+  num_samples: 32
+  sequence_length: 1024
+  seed: 42
+  packing: true
+
+evaluation:
+  enabled: true
+  compare_original: true
+  benchmark_name: wikitext2_validation_packed_eval128
+  use_calibration_data: false
+  source: dataset
+  dataset_name: wikitext
+  dataset_config: wikitext-2-raw-v1
+  split: validation
+  text_column: text
+  num_samples: 128
+  sequence_length: 1024
+  packing: true
+  max_batches: 128
+  measure_throughput: true
+
+output:
+  run_name: qwen2_5_1_5b_gptq_4bit_eval128
+  output_dir: artifacts
+  save_model: false
+
+runtime:
+  device: auto
+  seed: 42
+  log_level: INFO

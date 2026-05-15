@@ -1,0 +1,283 @@
+from __future__ import annotations
+
+import subprocess
+from pathlib import Path
+
+from sketchawq.baselines.config import load_baseline_config
+from sketchawq.config import load_config
+
+
+PROJECT_ROOT = Path(__file__).resolve().parents[1]
+
+PAPER_EVAL_CONFIGS = {
+    ("qwen2_5_1_5b", 3): (
+        "configs/paper/qwen2_5_1_5b_3bit.yaml",
+        "configs/baselines/qwen2_5_1_5b_gptq_3bit.yaml",
+    ),
+    ("qwen2_5_1_5b", 4): (
+        "configs/paper/qwen2_5_1_5b_4bit.yaml",
+        "configs/baselines/qwen2_5_1_5b_gptq_4bit.yaml",
+    ),
+    ("qwen3_4b", 3): (
+        "configs/paper/qwen3_4b_3bit.yaml",
+        "configs/baselines/qwen3_4b_gptq_3bit.yaml",
+    ),
+    ("qwen3_4b", 4): (
+        "configs/paper/qwen3_4b_4bit.yaml",
+        "configs/baselines/qwen3_4b_gptq_4bit.yaml",
+    ),
+    ("qwen3_8b", 3): (
+        "configs/paper/qwen3_8b_3bit.yaml",
+        "configs/baselines/qwen3_8b_gptq_3bit.yaml",
+    ),
+    ("qwen3_8b", 4): (
+        "configs/paper/qwen3_8b_4bit.yaml",
+        "configs/baselines/qwen3_8b_gptq_4bit.yaml",
+    ),
+    ("qwen3_14b", 3): (
+        "configs/paper/qwen3_14b_3bit.yaml",
+        "configs/baselines/qwen3_14b_gptq_3bit.yaml",
+    ),
+    ("qwen3_14b", 4): (
+        "configs/paper/qwen3_14b_4bit.yaml",
+        "configs/baselines/qwen3_14b_gptq_4bit.yaml",
+    ),
+    ("qwen3_32b", 3): (
+        "configs/paper/qwen3_32b_3bit.yaml",
+        "configs/baselines/qwen3_32b_gptq_3bit.yaml",
+    ),
+    ("qwen3_32b", 4): (
+        "configs/paper/qwen3_32b_4bit.yaml",
+        "configs/baselines/qwen3_32b_gptq_4bit.yaml",
+    ),
+    ("llama_7b", 3): (
+        "configs/paper/llama_7b_3bit.yaml",
+        "configs/baselines/llama_7b_gptq_3bit.yaml",
+    ),
+    ("llama_7b", 4): (
+        "configs/paper/llama_7b_4bit.yaml",
+        "configs/baselines/llama_7b_gptq_4bit.yaml",
+    ),
+}
+
+QWEN3_8B_C4_EVAL_CONFIGS = {
+    3: (
+        "configs/paper/qwen3_8b_3bit_c4_eval.yaml",
+        "configs/baselines/qwen3_8b_gptq_3bit_c4_eval.yaml",
+    ),
+    4: (
+        "configs/paper/qwen3_8b_4bit_c4_eval.yaml",
+        "configs/baselines/qwen3_8b_gptq_4bit_c4_eval.yaml",
+    ),
+}
+
+
+def test_every_model_bit_has_valid_sketchawq_and_gptq_configs() -> None:
+    for sketchawq_config, gptq_config in PAPER_EVAL_CONFIGS.values():
+        sketchawq = load_config(PROJECT_ROOT / sketchawq_config)
+        baseline = load_baseline_config(PROJECT_ROOT / gptq_config)
+        assert baseline.method.normalized_name() == "gptq"
+        assert sketchawq.model.repo_id == baseline.model.repo_id
+        assert sketchawq.quantization.bits == baseline.quantization.bits
+        assert sketchawq.calibration.dataset_name == baseline.calibration.dataset_name
+        assert sketchawq.calibration.dataset_config == baseline.calibration.dataset_config
+        assert sketchawq.calibration.split == baseline.calibration.split
+        assert sketchawq.calibration.text_column == baseline.calibration.text_column
+        assert sketchawq.calibration.num_samples == baseline.calibration.num_samples
+        assert sketchawq.calibration.sequence_length == baseline.calibration.sequence_length
+        assert sketchawq.calibration.packing == baseline.calibration.packing
+        assert sketchawq.evaluation.benchmark_name == baseline.evaluation.benchmark_name
+        assert sketchawq.evaluation.dataset_name == baseline.evaluation.dataset_name
+        assert sketchawq.evaluation.dataset_config == baseline.evaluation.dataset_config
+        assert sketchawq.evaluation.split == baseline.evaluation.split
+        assert sketchawq.evaluation.text_column == baseline.evaluation.text_column
+        assert sketchawq.evaluation.num_samples == baseline.evaluation.num_samples
+        assert sketchawq.evaluation.sequence_length == baseline.evaluation.sequence_length
+        assert sketchawq.evaluation.packing == baseline.evaluation.packing
+        assert sketchawq.evaluation.max_batches == baseline.evaluation.max_batches
+        assert baseline.evaluation.benchmark_name.startswith("wikitext2_validation")
+        assert baseline.evaluation.max_batches in {64, 128}
+        assert baseline.evaluation.measure_throughput
+
+
+def test_qwen3_8b_c4_eval_configs_match_across_methods() -> None:
+    for bits, (sketchawq_config, gptq_config) in QWEN3_8B_C4_EVAL_CONFIGS.items():
+        sketchawq = load_config(PROJECT_ROOT / sketchawq_config)
+        baseline = load_baseline_config(PROJECT_ROOT / gptq_config)
+
+        assert baseline.method.normalized_name() == "gptq"
+        assert sketchawq.model.repo_id == "Qwen/Qwen3-8B"
+        assert sketchawq.model.repo_id == baseline.model.repo_id
+        assert sketchawq.quantization.bits == bits
+        assert sketchawq.quantization.bits == baseline.quantization.bits
+        assert sketchawq.calibration.dataset_name == "allenai/c4"
+        assert sketchawq.calibration.dataset_name == baseline.calibration.dataset_name
+        assert sketchawq.calibration.sequence_length == baseline.calibration.sequence_length
+        assert sketchawq.evaluation.benchmark_name == "c4_validation_packed_eval2048"
+        assert sketchawq.evaluation.dataset_name == "allenai/c4"
+        assert sketchawq.evaluation.dataset_config == "en"
+        assert sketchawq.evaluation.dataset_name == baseline.evaluation.dataset_name
+        assert sketchawq.evaluation.dataset_config == baseline.evaluation.dataset_config
+        assert sketchawq.evaluation.split == baseline.evaluation.split == "validation"
+        assert sketchawq.evaluation.sequence_length == baseline.evaluation.sequence_length == 2048
+        assert sketchawq.evaluation.max_batches == baseline.evaluation.max_batches == 64
+        assert sketchawq.evaluation.measure_throughput
+        assert baseline.evaluation.measure_throughput
+
+
+def test_every_model_bit_has_wrapper_script() -> None:
+    for model, bits in PAPER_EVAL_CONFIGS:
+        script = PROJECT_ROOT / "scripts" / "paper_eval" / f"{model}_{bits}bit.sh"
+        assert script.exists()
+        assert script.stat().st_mode & 0o111
+
+
+def test_wrapper_can_dry_run_gptq_for_one_model() -> None:
+    script = PROJECT_ROOT / "scripts" / "paper_eval" / "qwen3_14b_3bit.sh"
+
+    result = subprocess.run(
+        [str(script), "--method", "gptq", "--dry-run"],
+        cwd=PROJECT_ROOT,
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+
+    assert "infra/modal/baseline_app.py" in result.stdout
+    assert "configs/baselines/qwen3_14b_gptq_3bit.yaml" in result.stdout
+
+
+def test_generic_script_can_dry_run_both_methods_locally() -> None:
+    script = PROJECT_ROOT / "scripts" / "run_paper_eval.sh"
+
+    result = subprocess.run(
+        [str(script), "qwen3_32b", "4", "--method", "both", "--backend", "local", "--dry-run"],
+        cwd=PROJECT_ROOT,
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+
+    assert "python -m sketchawq.cli run configs/paper/qwen3_32b_4bit.yaml" in result.stdout
+    assert (
+        "python -m sketchawq.cli baseline configs/baselines/qwen3_32b_gptq_4bit.yaml"
+        in result.stdout
+    )
+
+
+def test_generic_script_can_dry_run_modal_gpu_override() -> None:
+    script = PROJECT_ROOT / "scripts" / "run_paper_eval.sh"
+
+    result = subprocess.run(
+        [str(script), "qwen3_8b", "3", "--method", "both", "--gpu", "L40S", "--dry-run"],
+        cwd=PROJECT_ROOT,
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+
+    assert "SKETCHAWQ_MODAL_GPU=L40S modal run infra/modal/sketchawq_app.py" in result.stdout
+    assert "SKETCHAWQ_MODAL_GPU=L40S modal run infra/modal/baseline_app.py" in result.stdout
+
+
+def test_generic_script_can_dry_run_c4_eval_for_qwen3_8b() -> None:
+    script = PROJECT_ROOT / "scripts" / "run_paper_eval.sh"
+
+    result = subprocess.run(
+        [str(script), "qwen3_8b", "3", "--method", "both", "--eval", "c4", "--dry-run"],
+        cwd=PROJECT_ROOT,
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+
+    assert "configs/paper/qwen3_8b_3bit_c4_eval.yaml" in result.stdout
+    assert "configs/baselines/qwen3_8b_gptq_3bit_c4_eval.yaml" in result.stdout
+
+
+def test_generic_script_rejects_gpu_override_for_local_backend() -> None:
+    script = PROJECT_ROOT / "scripts" / "run_paper_eval.sh"
+
+    result = subprocess.run(
+        [str(script), "qwen3_8b", "3", "--local", "--gpu", "L40S", "--dry-run"],
+        cwd=PROJECT_ROOT,
+        capture_output=True,
+        text=True,
+    )
+
+    assert result.returncode != 0
+    assert "--gpu only applies to the modal backend" in result.stderr
+
+
+def test_sync_results_script_dry_runs_qwen3_8b_both_bits_and_methods() -> None:
+    script = PROJECT_ROOT / "scripts" / "sync_paper_eval_results.sh"
+
+    result = subprocess.run(
+        [str(script), "qwen3_8b", "both", "--method", "both", "--dry-run"],
+        cwd=PROJECT_ROOT,
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+
+    assert "modal volume get --force sketchawq-artifacts /qwen3_8b_3bit_qwen_final_packed_eval2048" in result.stdout
+    assert "modal volume get --force sketchawq-artifacts /qwen3_8b_gptq_3bit_eval2048" in result.stdout
+    assert "modal volume get --force sketchawq-artifacts /qwen3_8b_4bit_qwen_final_packed_eval2048" in result.stdout
+    assert "modal volume get --force sketchawq-artifacts /qwen3_8b_gptq_4bit_eval2048" in result.stdout
+    assert "sketchawq.experiments.compare_methods" in result.stdout
+    assert "sketchawq.experiments.plot_benchmark_board" in result.stdout
+    assert "qwen3_8b_3_4bit_paper_eval_summary.csv" in result.stdout
+
+
+def test_sync_results_script_can_skip_plot_generation() -> None:
+    script = PROJECT_ROOT / "scripts" / "sync_paper_eval_results.sh"
+
+    result = subprocess.run(
+        [str(script), "qwen3_8b", "3", "--method", "gptq", "--no-plots", "--dry-run"],
+        cwd=PROJECT_ROOT,
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+
+    assert "modal volume get --force sketchawq-artifacts /qwen3_8b_gptq_3bit_eval2048" in result.stdout
+    assert "sketchawq.experiments.plot_benchmark_board" not in result.stdout
+
+
+def test_sync_results_script_dry_runs_qwen3_8b_c4_eval() -> None:
+    script = PROJECT_ROOT / "scripts" / "sync_paper_eval_results.sh"
+
+    result = subprocess.run(
+        [str(script), "qwen3_8b", "both", "--method", "both", "--eval", "c4", "--dry-run"],
+        cwd=PROJECT_ROOT,
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+
+    assert "modal volume get --force sketchawq-artifacts /qwen3_8b_3bit_qwen_final_c4_eval2048" in result.stdout
+    assert "modal volume get --force sketchawq-artifacts /qwen3_8b_gptq_3bit_c4_eval2048" in result.stdout
+    assert "modal volume get --force sketchawq-artifacts /qwen3_8b_4bit_qwen_final_c4_eval2048" in result.stdout
+    assert "modal volume get --force sketchawq-artifacts /qwen3_8b_gptq_4bit_c4_eval2048" in result.stdout
+    assert "--benchmark c4_validation_packed_eval2048" in result.stdout
+    assert "qwen3_8b_3_4bit_c4_eval_summary.csv" in result.stdout
+
+
+def test_qwen3_8b_paper_configs_use_focused_search_grids() -> None:
+    three_bit = load_config(PROJECT_ROOT / "configs/paper/qwen3_8b_3bit.yaml")
+    four_bit = load_config(PROJECT_ROOT / "configs/paper/qwen3_8b_4bit.yaml")
+
+    assert three_bit.quantization.awq_alpha_candidates == [0.0, 0.125, 0.25]
+    assert three_bit.quantization.clip_candidates == [0.85, 0.82, 0.8]
+    assert four_bit.quantization.awq_alpha_candidates == [0.0, 0.1, 0.2]
+    assert four_bit.quantization.clip_candidates == [0.93, 0.9, 0.87, 0.85]
+
+
+def test_qwen3_4b_paper_configs_use_focused_search_grids() -> None:
+    three_bit = load_config(PROJECT_ROOT / "configs/paper/qwen3_4b_3bit.yaml")
+    four_bit = load_config(PROJECT_ROOT / "configs/paper/qwen3_4b_4bit.yaml")
+
+    assert three_bit.quantization.awq_alpha_candidates == [0.0, 0.125, 0.25, 0.5]
+    assert three_bit.quantization.clip_candidates == [0.82, 0.8]
+    assert four_bit.quantization.awq_alpha_candidates == [0.0, 0.1, 0.2, 0.3]
+    assert four_bit.quantization.clip_candidates == [0.93, 0.9, 0.87, 0.85]

@@ -1,0 +1,97 @@
+targets:
+  smoke:
+    description: Fast local sanity check on tiny-gpt2.
+    runner: sketchawq
+    configs:
+      - configs/smoke/tiny.yaml
+
+  smoke-qwen:
+    description: Small Qwen2.5 1.5B 3-bit and 4-bit smoke configs.
+    runner: sketchawq
+    configs:
+      - configs/smoke/qwen2_5_1_5b_3bit.yaml
+      - configs/smoke/qwen2_5_1_5b_4bit.yaml
+
+  paper-qwen2:
+    description: Canonical Qwen2.5 1.5B SketchAWQ 3-bit and 4-bit rows.
+    runner: sketchawq
+    configs:
+      - configs/paper/qwen2_5_1_5b_3bit.yaml
+      - configs/paper/qwen2_5_1_5b_4bit.yaml
+
+  paper-qwen3-4b:
+    description: Canonical Qwen3 4B SketchAWQ rows.
+    runner: sketchawq
+    configs:
+      - configs/paper/qwen3_4b_3bit.yaml
+      - configs/paper/qwen3_4b_4bit.yaml
+
+  paper-qwen3-8b:
+    description: Canonical Qwen3 8B SketchAWQ rows.
+    runner: sketchawq
+    configs:
+      - configs/paper/qwen3_8b_3bit.yaml
+      - configs/paper/qwen3_8b_4bit.yaml
+
+  paper-qwen3-14b:
+    description: Canonical Qwen3 14B SketchAWQ rows.
+    runner: sketchawq
+    configs:
+      - configs/paper/qwen3_14b_3bit.yaml
+      - configs/paper/qwen3_14b_4bit.yaml
+
+  paper-qwen3-32b:
+    description: Canonical Qwen3 32B SketchAWQ rows.
+    runner: sketchawq
+    configs:
+      - configs/paper/qwen3_32b_3bit.yaml
+      - configs/paper/qwen3_32b_4bit.yaml
+
+  paper-llama7b:
+    description: Canonical LLaMA 7B SketchAWQ rows.
+    runner: sketchawq
+    configs:
+      - configs/paper/llama_7b_3bit.yaml
+      - configs/paper/llama_7b_4bit.yaml
+
+  baseline-qwen2:
+    description: Qwen2.5 1.5B GPTQ paper-eval rows.
+    runner: baseline
+    configs:
+      - configs/baselines/qwen2_5_1_5b_gptq_3bit.yaml
+      - configs/baselines/qwen2_5_1_5b_gptq_4bit.yaml
+
+  baseline-qwen3-4b:
+    description: Qwen3 4B GPTQ paper-eval rows.
+    runner: baseline
+    configs:
+      - configs/baselines/qwen3_4b_gptq_3bit.yaml
+      - configs/baselines/qwen3_4b_gptq_4bit.yaml
+
+  baseline-qwen3-8b:
+    description: Qwen3 8B GPTQ paper-eval rows.
+    runner: baseline
+    configs:
+      - configs/baselines/qwen3_8b_gptq_3bit.yaml
+      - configs/baselines/qwen3_8b_gptq_4bit.yaml
+
+  baseline-qwen3-14b:
+    description: Qwen3 14B GPTQ paper-eval rows.
+    runner: baseline
+    configs:
+      - configs/baselines/qwen3_14b_gptq_3bit.yaml
+      - configs/baselines/qwen3_14b_gptq_4bit.yaml
+
+  baseline-qwen3-32b:
+    description: Qwen3 32B GPTQ paper-eval rows.
+    runner: baseline
+    configs:
+      - configs/baselines/qwen3_32b_gptq_3bit.yaml
+      - configs/baselines/qwen3_32b_gptq_4bit.yaml
+
+  baseline-llama7b:
+    description: LLaMA 7B GPTQ paper-eval rows.
+    runner: baseline
+    configs:
+      - configs/baselines/llama_7b_gptq_3bit.yaml
+      - configs/baselines/llama_7b_gptq_4bit.yaml

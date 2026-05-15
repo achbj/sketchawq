@@ -1,0 +1,132 @@
+from __future__ import annotations
+
+import csv
+from pathlib import Path
+
+import pytest
+
+from sketchawq.experiments.plot_benchmark_board import (
+    build_board_rows,
+    _render_html,
+    _write_csv,
+    _write_matplotlib_plots,
+)
+
+
+def _sample_rows() -> list[dict[str, str]]:
+    return [
+        {
+            "method": "GPTQModel-GPTQ",
+            "run_name": "qwen3_4b_gptq_4bit",
+            "model_repo_id": "Qwen/Qwen3-4B",
+            "benchmark": "wikitext2_validation_packed_eval128",
+            "bits": "4",
+            "group_size": "128",
+            "perplexity": "8.15",
+            "original_perplexity": "7.95",
+            "tokens_per_second": "920.5",
+            "calibration_samples": "32",
+            "calibration_packing": "true",
+            "sequence_length": "1024",
+        },
+        {
+            "method": "SketchAWQ-diagonal-low-rank-outlier-protect-v0",
+            "run_name": "qwen3_4b_sketchawq_4bit",
+            "model_repo_id": "Qwen/Qwen3-4B",
+            "benchmark": "wikitext2_validation_packed_eval128",
+            "bits": "4",
+            "group_size": "128",
+            "perplexity": "8.17",
+            "original_perplexity": "7.95",
+            "tokens_per_second": "880.1",
+            "calibration_samples": "32",
+            "calibration_packing": "true",
+            "sequence_length": "1024",
+        },
+        {
+            "method": "SketchAWQ-diagonal-low-rank-outlier-protect-v0",
+            "run_name": "qwen3_4b_sketchawq_3bit",
+            "model_repo_id": "Qwen/Qwen3-4B",
+            "benchmark": "wikitext2_validation_packed_eval128",
+            "bits": "3",
+            "group_size": "64",
+            "perplexity": "8.81",
+            "original_perplexity": "7.95",
+            "tokens_per_second": "845.2",
+            "calibration_samples": "32",
+            "calibration_packing": "true",
+            "sequence_length": "1024",
+        },
+        {
+            "method": "GPTQModel-GPTQ",
+            "run_name": "qwen3_4b_gptq_3bit",
+            "model_repo_id": "Qwen/Qwen3-4B",
+            "benchmark": "wikitext2_validation_packed_eval128",
+            "bits": "3",
+            "group_size": "128",
+            "perplexity": "9.12",
+            "original_perplexity": "7.95",
+            "tokens_per_second": "900.0",
+            "calibration_samples": "32",
+            "calibration_packing": "true",
+            "sequence_length": "1024",
+        },
+    ]
+
+
+def test_board_rows_add_method_labels_and_delta_from_best() -> None:
+    rows = build_board_rows(
+        _sample_rows(),
+        model="Qwen/Qwen3-4B",
+        benchmark="wikitext2_validation_packed_eval128",
+    )
+
+    four_bit_sketch = next(row for row in rows if row["bits"] == "4" and row["method_family"] == "SketchAWQ")
+    three_bit_gptq = next(row for row in rows if row["bits"] == "3" and row["method_family"] == "GPTQ")
+
+    assert four_bit_sketch["display_method"] == "SketchAWQ"
+    assert four_bit_sketch["ppl_delta_from_best"] == pytest.approx(0.02)
+    assert four_bit_sketch["comparison_note"].startswith("+0.020 PPL")
+    assert three_bit_gptq["ppl_percent_from_best"] == pytest.approx((9.12 - 8.81) / 8.81 * 100)
+    assert three_bit_gptq["best_for_bits"] == ""
+
+
+def test_html_summary_explains_context_and_delta_columns() -> None:
+    rows = build_board_rows(
+        _sample_rows(),
+        model="Qwen/Qwen3-4B",
+        benchmark="wikitext2_validation_packed_eval128",
+    )
+
+    html = _render_html(rows)
+
+    assert "Qwen/Qwen3-4B" in html
+    assert "wikitext2_validation_packed_eval128" in html
+    assert "3-bit winner" in html
+    assert "Delta vs Best" in html
+    assert "Sequence length" in html
+    assert "dense dequantized simulation" in html
+
+
+def test_board_csv_includes_derived_comparison_fields(tmp_path: Path) -> None:
+    rows = build_board_rows(_sample_rows(), model=None, benchmark=None)
+    output = tmp_path / "board.csv"
+
+    _write_csv(rows, output)
+
+    with output.open("r", encoding="utf-8", newline="") as handle:
+        header = next(csv.reader(handle))
+
+    assert "display_method" in header
+    assert "ppl_delta_from_best" in header
+    assert "comparison_note" in header
+
+
+def test_benchmark_plot_writes_png_when_matplotlib_is_available(tmp_path: Path) -> None:
+    pytest.importorskip("matplotlib")
+    rows = build_board_rows(_sample_rows(), model=None, benchmark=None)
+
+    paths = _write_matplotlib_plots(rows, tmp_path, "board")
+
+    assert {path.suffix for path in paths} == {".png", ".pdf"}
+    assert all(path.stat().st_size > 0 for path in paths)

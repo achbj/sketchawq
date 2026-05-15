@@ -1,0 +1,179 @@
+from __future__ import annotations
+
+from collections.abc import Iterable
+from dataclasses import dataclass
+from itertools import cycle, islice
+from random import Random
+
+import torch
+from datasets import load_dataset
+
+from sketchawq.config import CalibrationConfig
+
+
+_SYNTHETIC_TEXTS = [
+    "Post-training quantization compresses a trained language model without retraining it.",
+    "Activation-aware quantization protects channels that matter most for the model output.",
+    "A Hessian sketch gives a cheap signal about which rounding errors are more harmful.",
+    "Three-bit quantization is difficult because each weight has very few representable values.",
+    "The goal is to keep the method simple, fast, and compatible with standard weight kernels.",
+]
+
+
+@dataclass(frozen=True, slots=True)
+class CalibrationBatch:
+    input_ids: torch.Tensor
+    attention_mask: torch.Tensor
+
+    def as_model_kwargs(self) -> dict[str, torch.Tensor]:
+        return {"input_ids": self.input_ids, "attention_mask": self.attention_mask}
+
+
+def _load_texts(config: CalibrationConfig) -> list[str]:
+    if config.source == "synthetic":
+        repeats = (config.num_samples // len(_SYNTHETIC_TEXTS)) + 1
+        return (_SYNTHETIC_TEXTS * repeats)[: config.num_samples]
+
+    if config.source != "dataset":
+        raise ValueError("calibration.source must be either 'synthetic' or 'dataset'")
+
+    dataset = load_dataset(config.dataset_name, config.dataset_config, split=config.split, streaming=True)
+    texts: list[str] = []
+    for row in dataset:
+        text = str(row.get(config.text_column, "")).strip()
+        if text:
+            texts.append(text)
+        if len(texts) >= config.num_samples:
+            break
+    if not texts:
+        raise RuntimeError("No calibration texts were loaded")
+    return texts
+
+
+def _iter_texts(config: CalibrationConfig, *, repeat_synthetic: bool = False) -> Iterable[str]:
+    if config.source == "synthetic":
+        source = cycle(_SYNTHETIC_TEXTS) if repeat_synthetic else iter(_load_texts(config))
+        for text in source:
+            stripped = text.strip()
+            if stripped:
+                yield stripped
+        return
+
+    if config.source != "dataset":
+        raise ValueError("calibration.source must be either 'synthetic' or 'dataset'")
+
+    dataset = load_dataset(config.dataset_name, config.dataset_config, split=config.split, streaming=True)
+    for row in dataset:
+        text = str(row.get(config.text_column, "")).strip()
+        if text:
+            yield text
+
+
+def make_calibration_batches(
+    tokenizer,
+    config: CalibrationConfig,
+    *,
+    device: torch.device,
+) -> list[CalibrationBatch]:
+    if config.packing:
+        return _make_packed_calibration_batches(tokenizer, config, device=device)
+
+    texts = list(islice(_iter_texts(config), config.num_samples))
+    batches: list[CalibrationBatch] = []
+
+    for text in texts:
+        encoded = tokenizer(
+            text,
+            max_length=config.sequence_length,
+            truncation=True,
+            padding="max_length",
+            return_tensors="pt",
+        )
+        batches.append(
+            CalibrationBatch(
+                input_ids=encoded["input_ids"].to(device),
+                attention_mask=encoded["attention_mask"].to(device),
+            )
+        )
+    return batches
+
+
+def _make_packed_calibration_batches(
+    tokenizer,
+    config: CalibrationConfig,
+    *,
+    device: torch.device,
+) -> list[CalibrationBatch]:
+    selected_chunks = _select_packed_chunks(tokenizer, config)
+    if len(selected_chunks) < config.num_samples:
+        raise RuntimeError(
+            "Packed calibration produced "
+            f"{len(selected_chunks)} chunks, but num_samples={config.num_samples}. "
+            "Use a longer calibration split or reduce sequence_length."
+        )
+
+    batches: list[CalibrationBatch] = []
+    for chunk in selected_chunks:
+        input_ids = torch.tensor([chunk], dtype=torch.long, device=device)
+        attention_mask = torch.ones_like(input_ids, device=device)
+        batches.append(CalibrationBatch(input_ids=input_ids, attention_mask=attention_mask))
+    return batches
+
+
+def _select_packed_chunks(tokenizer, config: CalibrationConfig) -> list[list[int]]:
+    if config.source == "synthetic":
+        return list(
+            islice(
+                _iter_packed_chunks(tokenizer, config, repeat_synthetic=True),
+                config.num_samples,
+            )
+        )
+
+    rng = Random(config.seed)
+    pool_size = config.num_samples * 4
+    pool: list[list[int]] = list(islice(_iter_packed_chunks(tokenizer, config), pool_size))
+    rng.shuffle(pool)
+    return pool[: config.num_samples]
+
+
+def _iter_packed_chunks(
+    tokenizer,
+    config: CalibrationConfig,
+    *,
+    repeat_synthetic: bool = False,
+) -> Iterable[list[int]]:
+    buffer: list[int] = []
+    eos_token_id = _separator_token_id(tokenizer)
+    for text in _iter_texts(config, repeat_synthetic=repeat_synthetic):
+        token_ids = _encode_token_ids(tokenizer, text)
+        if not token_ids:
+            continue
+        buffer.extend(token_ids)
+        if eos_token_id is not None:
+            buffer.append(eos_token_id)
+        while len(buffer) >= config.sequence_length:
+            yield buffer[: config.sequence_length]
+            del buffer[: config.sequence_length]
+
+
+def _encode_token_ids(tokenizer, text: str) -> list[int]:
+    encoded = tokenizer(text, add_special_tokens=False)
+    input_ids = encoded["input_ids"]
+    if isinstance(input_ids, torch.Tensor):
+        input_ids = input_ids.squeeze(0).tolist()
+    if input_ids and isinstance(input_ids[0], list):
+        input_ids = input_ids[0]
+    return [int(token_id) for token_id in input_ids]
+
+
+def _separator_token_id(tokenizer) -> int | None:
+    for attr in ("eos_token_id", "sep_token_id", "pad_token_id"):
+        token_id = getattr(tokenizer, attr, None)
+        if token_id is not None:
+            return int(token_id)
+    return None
+
+
+def iter_model_kwargs(batches: Iterable[CalibrationBatch]) -> Iterable[dict[str, torch.Tensor]]:
+    for batch in batches:
+        yield batch.as_model_kwargs()
