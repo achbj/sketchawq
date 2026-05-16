@@ -41,6 +41,12 @@ def test_run_summary_includes_global_storage_estimates() -> None:
     assert row["fp16_weight_mb"] == 40.0
     assert row["estimated_quantized_mb"] == 10.0
     assert row["estimated_compression_ratio"] == pytest.approx(4.0)
+    assert row["calibration_dataset"] == config.calibration.dataset_name
+    assert row["calibration_samples"] == config.calibration.num_samples
+    assert row["calibration_sequence_length"] == config.calibration.sequence_length
+    assert row["evaluation_dataset"] == config.evaluation.dataset_name
+    assert row["evaluation_samples"] == config.evaluation.num_samples
+    assert row["evaluation_sequence_length"] == config.evaluation.sequence_length
     assert row["collect_stats_seconds"] == 0.4
     assert row["layer_quantization_seconds"] == 0.3
     assert row["awq_min_scale"] == config.quantization.awq_min_scale

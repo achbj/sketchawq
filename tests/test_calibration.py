@@ -4,7 +4,7 @@ import torch
 
 from sketchawq.config import CalibrationConfig, load_config
 from sketchawq.data import calibration
-from sketchawq.data.calibration import make_calibration_batches
+from sketchawq.data.calibration import TextBatchConfig, make_calibration_batches, make_text_batches
 
 
 class WhitespaceTokenizer:
@@ -65,6 +65,32 @@ def test_unpacked_calibration_keeps_legacy_padding(monkeypatch) -> None:
     assert len(batches) == 1
     assert batches[0].input_ids.shape == (1, 5)
     torch.testing.assert_close(batches[0].attention_mask, torch.tensor([[1, 1, 0, 0, 0]]))
+
+
+def test_text_batches_support_evaluation_shaped_config(monkeypatch) -> None:
+    monkeypatch.setattr(
+        calibration,
+        "load_dataset",
+        lambda *args, **kwargs: [{"text": "alpha beta"}, {"text": "gamma delta"}],
+    )
+    tokenizer = WhitespaceTokenizer()
+    config = TextBatchConfig(
+        source="dataset",
+        dataset_name="wikitext",
+        dataset_config="wikitext-2-raw-v1",
+        split="validation",
+        text_column="text",
+        num_samples=1,
+        sequence_length=3,
+        seed=123,
+        packing=False,
+    )
+
+    batches = make_text_batches(tokenizer, config, device=torch.device("cpu"))
+
+    assert len(batches) == 1
+    torch.testing.assert_close(batches[0].input_ids, torch.tensor([[1, 2, 0]]))
+    torch.testing.assert_close(batches[0].attention_mask, torch.tensor([[1, 1, 0]]))
 
 
 def test_unpacked_dataset_calibration_respects_num_samples(monkeypatch) -> None:

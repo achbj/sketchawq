@@ -4,6 +4,7 @@ from collections.abc import Iterable
 from dataclasses import dataclass
 from itertools import cycle, islice
 from random import Random
+from typing import Any
 
 import torch
 from datasets import load_dataset
@@ -29,30 +30,53 @@ class CalibrationBatch:
         return {"input_ids": self.input_ids, "attention_mask": self.attention_mask}
 
 
-def _load_texts(config: CalibrationConfig) -> list[str]:
+@dataclass(frozen=True, slots=True)
+class TextBatchConfig:
+    source: str
+    dataset_name: str
+    dataset_config: str
+    split: str
+    text_column: str
+    num_samples: int
+    sequence_length: int
+    seed: int
+    packing: bool
+
+    @classmethod
+    def from_calibration(cls, config: CalibrationConfig) -> TextBatchConfig:
+        return cls(
+            source=config.source,
+            dataset_name=config.dataset_name,
+            dataset_config=config.dataset_config,
+            split=config.split,
+            text_column=config.text_column,
+            num_samples=config.num_samples,
+            sequence_length=config.sequence_length,
+            seed=config.seed,
+            packing=config.packing,
+        )
+
+    @classmethod
+    def from_evaluation(cls, config: Any, *, seed: int) -> TextBatchConfig:
+        return cls(
+            source=config.source,
+            dataset_name=config.dataset_name,
+            dataset_config=config.dataset_config,
+            split=config.split,
+            text_column=config.text_column,
+            num_samples=config.num_samples,
+            sequence_length=config.sequence_length,
+            seed=seed,
+            packing=config.packing,
+        )
+
+
+def _iter_texts(config: TextBatchConfig, *, repeat_synthetic: bool = False) -> Iterable[str]:
     if config.source == "synthetic":
         repeats = (config.num_samples // len(_SYNTHETIC_TEXTS)) + 1
-        return (_SYNTHETIC_TEXTS * repeats)[: config.num_samples]
-
-    if config.source != "dataset":
-        raise ValueError("calibration.source must be either 'synthetic' or 'dataset'")
-
-    dataset = load_dataset(config.dataset_name, config.dataset_config, split=config.split, streaming=True)
-    texts: list[str] = []
-    for row in dataset:
-        text = str(row.get(config.text_column, "")).strip()
-        if text:
-            texts.append(text)
-        if len(texts) >= config.num_samples:
-            break
-    if not texts:
-        raise RuntimeError("No calibration texts were loaded")
-    return texts
-
-
-def _iter_texts(config: CalibrationConfig, *, repeat_synthetic: bool = False) -> Iterable[str]:
-    if config.source == "synthetic":
-        source = cycle(_SYNTHETIC_TEXTS) if repeat_synthetic else iter(_load_texts(config))
+        source = cycle(_SYNTHETIC_TEXTS) if repeat_synthetic else iter(
+            (_SYNTHETIC_TEXTS * repeats)[: config.num_samples]
+        )
         for text in source:
             stripped = text.strip()
             if stripped:
@@ -75,8 +99,21 @@ def make_calibration_batches(
     *,
     device: torch.device,
 ) -> list[CalibrationBatch]:
+    return make_text_batches(
+        tokenizer,
+        TextBatchConfig.from_calibration(config),
+        device=device,
+    )
+
+
+def make_text_batches(
+    tokenizer,
+    config: TextBatchConfig,
+    *,
+    device: torch.device,
+) -> list[CalibrationBatch]:
     if config.packing:
-        return _make_packed_calibration_batches(tokenizer, config, device=device)
+        return _make_packed_text_batches(tokenizer, config, device=device)
 
     texts = list(islice(_iter_texts(config), config.num_samples))
     batches: list[CalibrationBatch] = []
@@ -98,9 +135,9 @@ def make_calibration_batches(
     return batches
 
 
-def _make_packed_calibration_batches(
+def _make_packed_text_batches(
     tokenizer,
-    config: CalibrationConfig,
+    config: TextBatchConfig,
     *,
     device: torch.device,
 ) -> list[CalibrationBatch]:
@@ -120,7 +157,7 @@ def _make_packed_calibration_batches(
     return batches
 
 
-def _select_packed_chunks(tokenizer, config: CalibrationConfig) -> list[list[int]]:
+def _select_packed_chunks(tokenizer, config: TextBatchConfig) -> list[list[int]]:
     if config.source == "synthetic":
         return list(
             islice(
@@ -138,7 +175,7 @@ def _select_packed_chunks(tokenizer, config: CalibrationConfig) -> list[list[int
 
 def _iter_packed_chunks(
     tokenizer,
-    config: CalibrationConfig,
+    config: TextBatchConfig,
     *,
     repeat_synthetic: bool = False,
 ) -> Iterable[list[int]]:

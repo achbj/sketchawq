@@ -20,12 +20,13 @@ from sketchawq.baselines.config import (
     baseline_config_to_dict,
     load_baseline_config,
 )
-from sketchawq.config import CalibrationConfig
 from sketchawq.data.calibration import (
     CalibrationBatch,
+    TextBatchConfig,
     _iter_texts,
     _select_packed_chunks,
     make_calibration_batches,
+    make_text_batches,
 )
 from sketchawq.eval.runner import evaluate_model_variant
 from sketchawq.logging_utils import configure_logging
@@ -232,8 +233,16 @@ def build_baseline_run_summary_row(
         "benchmark": config.evaluation.benchmark_name,
         "calibration_source": config.calibration.source,
         "calibration_dataset": config.calibration.dataset_name,
+        "calibration_split": config.calibration.split,
         "calibration_samples": config.calibration.num_samples,
+        "calibration_sequence_length": config.calibration.sequence_length,
         "calibration_packing": config.calibration.packing,
+        "evaluation_source": config.evaluation.source,
+        "evaluation_dataset": config.evaluation.dataset_name,
+        "evaluation_split": config.evaluation.split,
+        "evaluation_samples": config.evaluation.num_samples,
+        "evaluation_sequence_length": config.evaluation.sequence_length,
+        "evaluation_packing": config.evaluation.packing,
         "sequence_length": config.calibration.sequence_length,
         "num_layers": quant.get("num_layers"),
         "quantization_seconds": quant.get("elapsed_seconds"),
@@ -607,11 +616,12 @@ def _make_gptqmodel_calibration_dataset(
     tokenizer: Any,
     config: ExternalBaselineConfig,
 ) -> list[dict[str, torch.Tensor]]:
+    batch_config = TextBatchConfig.from_calibration(config.calibration)
     if config.calibration.packing:
-        return _make_packed_gptqmodel_calibration_dataset(tokenizer, config)
+        return _make_packed_gptqmodel_calibration_dataset(tokenizer, config, batch_config)
 
     dataset: list[dict[str, torch.Tensor]] = []
-    for text in _iter_texts(config.calibration):
+    for text in _iter_texts(batch_config):
         encoded = tokenizer(
             text,
             max_length=config.calibration.sequence_length,
@@ -641,8 +651,9 @@ def _make_gptqmodel_calibration_dataset(
 def _make_packed_gptqmodel_calibration_dataset(
     tokenizer: Any,
     config: ExternalBaselineConfig,
+    batch_config: TextBatchConfig,
 ) -> list[dict[str, torch.Tensor]]:
-    chunks = _select_packed_chunks(tokenizer, config.calibration)
+    chunks = _select_packed_chunks(tokenizer, batch_config)
     if len(chunks) < config.calibration.num_samples:
         raise RuntimeError(
             "Packed GPTQModel calibration produced "
@@ -831,21 +842,14 @@ def _load_tokenizer(config: ExternalBaselineConfig, *, cache_dir: str | Path | N
 
 def _make_evaluation_batches(tokenizer, config: ExternalBaselineConfig, *, device: torch.device):
     batch_config = (
-        config.calibration
+        TextBatchConfig.from_calibration(config.calibration)
         if config.evaluation.use_calibration_data
-        else CalibrationConfig(
-            source=config.evaluation.source,
-            dataset_name=config.evaluation.dataset_name,
-            dataset_config=config.evaluation.dataset_config,
-            split=config.evaluation.split,
-            text_column=config.evaluation.text_column,
-            num_samples=config.evaluation.num_samples,
-            sequence_length=config.evaluation.sequence_length,
+        else TextBatchConfig.from_evaluation(
+            config.evaluation,
             seed=config.calibration.seed,
-            packing=config.evaluation.packing,
         )
     )
-    return make_calibration_batches(tokenizer, batch_config, device=device)
+    return make_text_batches(tokenizer, batch_config, device=device)
 
 
 def _infer_model_input_device(model: torch.nn.Module, *, preferred: torch.device) -> torch.device:

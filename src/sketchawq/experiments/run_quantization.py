@@ -5,8 +5,12 @@ import logging
 from pathlib import Path
 from typing import Any
 
-from sketchawq.config import CalibrationConfig, load_config
-from sketchawq.data.calibration import make_calibration_batches
+from sketchawq.config import load_config
+from sketchawq.data.calibration import (
+    TextBatchConfig,
+    make_calibration_batches,
+    make_text_batches,
+)
 from sketchawq.eval.runner import evaluate_model_variant
 from sketchawq.logging_utils import configure_logging
 from sketchawq.models.load import choose_device, load_causal_lm
@@ -97,18 +101,11 @@ def _make_evaluation_batches(
     if config.evaluation.use_calibration_data:
         return calibration_batches
 
-    return make_calibration_batches(
+    return make_text_batches(
         tokenizer,
-        CalibrationConfig(
-            source=config.evaluation.source,
-            dataset_name=config.evaluation.dataset_name,
-            dataset_config=config.evaluation.dataset_config,
-            split=config.evaluation.split,
-            text_column=config.evaluation.text_column,
-            num_samples=config.evaluation.num_samples,
-            sequence_length=config.evaluation.sequence_length,
+        TextBatchConfig.from_evaluation(
+            config.evaluation,
             seed=config.calibration.seed,
-            packing=config.evaluation.packing,
         ),
         device=device,
     )

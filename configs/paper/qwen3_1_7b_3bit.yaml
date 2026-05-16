@@ -42,28 +42,28 @@ calibration:
   split: train
   text_column: text
   num_samples: 256
-  sequence_length: 2048
+  sequence_length: 1024
   seed: 42
   packing: true
 
 evaluation:
   enabled: true
   compare_original: true
-  benchmark_name: wikitext2_validation_packed_eval2048
+  benchmark_name: wikitext2_validation_packed_eval1024
   use_calibration_data: false
   source: dataset
   dataset_name: wikitext
   dataset_config: wikitext-2-raw-v1
   split: validation
   text_column: text
-  num_samples: 64
-  sequence_length: 2048
+  num_samples: 256
+  sequence_length: 1024
   packing: true
-  max_batches: 64
+  max_batches: 256
   measure_throughput: true
 
 output:
-  run_name: qwen3_1_7b_3bit_qwen_final_packed_eval2048
+  run_name: qwen3_4b_3bit_qwen_check_packed_eval1024
   output_dir: artifacts
   save_model: false
 

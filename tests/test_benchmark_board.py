@@ -25,9 +25,19 @@ def _sample_rows() -> list[dict[str, str]]:
             "perplexity": "8.15",
             "original_perplexity": "7.95",
             "tokens_per_second": "920.5",
-            "calibration_samples": "32",
+            "calibration_source": "dataset",
+            "calibration_dataset": "allenai/c4",
+            "calibration_samples": "128",
+            "calibration_sequence_length": "2048",
             "calibration_packing": "true",
-            "sequence_length": "1024",
+            "sequence_length": "2048",
+            "evaluation_dataset": "wikitext",
+            "evaluation_samples": "64",
+            "evaluation_sequence_length": "2048",
+            "evaluation_packing": "true",
+            "fp16_weight_mb": "8192",
+            "estimated_quantized_mb": "2300",
+            "estimated_compression_ratio": "3.56",
         },
         {
             "method": "SketchAWQ-diagonal-low-rank-outlier-protect-v0",
@@ -39,9 +49,19 @@ def _sample_rows() -> list[dict[str, str]]:
             "perplexity": "8.17",
             "original_perplexity": "7.95",
             "tokens_per_second": "880.1",
-            "calibration_samples": "32",
+            "calibration_source": "dataset",
+            "calibration_dataset": "allenai/c4",
+            "calibration_samples": "128",
+            "calibration_sequence_length": "2048",
             "calibration_packing": "true",
-            "sequence_length": "1024",
+            "sequence_length": "2048",
+            "evaluation_dataset": "wikitext",
+            "evaluation_samples": "64",
+            "evaluation_sequence_length": "2048",
+            "evaluation_packing": "true",
+            "fp16_weight_mb": "8192",
+            "estimated_quantized_mb": "2500",
+            "estimated_compression_ratio": "3.28",
         },
         {
             "method": "SketchAWQ-diagonal-low-rank-outlier-protect-v0",
@@ -53,9 +73,19 @@ def _sample_rows() -> list[dict[str, str]]:
             "perplexity": "8.81",
             "original_perplexity": "7.95",
             "tokens_per_second": "845.2",
-            "calibration_samples": "32",
+            "calibration_source": "dataset",
+            "calibration_dataset": "allenai/c4",
+            "calibration_samples": "128",
+            "calibration_sequence_length": "2048",
             "calibration_packing": "true",
-            "sequence_length": "1024",
+            "sequence_length": "2048",
+            "evaluation_dataset": "wikitext",
+            "evaluation_samples": "64",
+            "evaluation_sequence_length": "2048",
+            "evaluation_packing": "true",
+            "fp16_weight_mb": "8192",
+            "estimated_quantized_mb": "1900",
+            "estimated_compression_ratio": "4.31",
         },
         {
             "method": "GPTQModel-GPTQ",
@@ -67,9 +97,19 @@ def _sample_rows() -> list[dict[str, str]]:
             "perplexity": "9.12",
             "original_perplexity": "7.95",
             "tokens_per_second": "900.0",
-            "calibration_samples": "32",
+            "calibration_source": "dataset",
+            "calibration_dataset": "allenai/c4",
+            "calibration_samples": "128",
+            "calibration_sequence_length": "2048",
             "calibration_packing": "true",
-            "sequence_length": "1024",
+            "sequence_length": "2048",
+            "evaluation_dataset": "wikitext",
+            "evaluation_samples": "64",
+            "evaluation_sequence_length": "2048",
+            "evaluation_packing": "true",
+            "fp16_weight_mb": "8192",
+            "estimated_quantized_mb": "2100",
+            "estimated_compression_ratio": "3.90",
         },
     ]
 
@@ -104,7 +144,14 @@ def test_html_summary_explains_context_and_delta_columns() -> None:
     assert "wikitext2_validation_packed_eval128" in html
     assert "3-bit winner" in html
     assert "Delta vs Best" in html
-    assert "Sequence length" in html
+    assert "Model Size" in html
+    assert "FP16 Size" in html
+    assert "Quantized Size" in html
+    assert "Calibration Data" in html
+    assert "Evaluation Data" in html
+    assert "allenai/c4" in html
+    assert "128 samples" in html
+    assert "seq 2048" in html
     assert "dense dequantized simulation" in html
 
 
@@ -120,6 +167,9 @@ def test_board_csv_includes_derived_comparison_fields(tmp_path: Path) -> None:
     assert "display_method" in header
     assert "ppl_delta_from_best" in header
     assert "comparison_note" in header
+    assert "fp16_weight_mb" in header
+    assert "estimated_quantized_mb" in header
+    assert "estimated_compression_ratio" in header
 
 
 def test_benchmark_plot_writes_png_when_matplotlib_is_available(tmp_path: Path) -> None:

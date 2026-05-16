@@ -29,8 +29,21 @@ BOARD_FIELDS = [
     "prepare_sketches_seconds",
     "layer_quantization_seconds",
     "tokens_per_second",
+    "fp16_weight_mb",
+    "estimated_quantized_mb",
+    "estimated_compression_ratio",
+    "calibration_source",
+    "calibration_dataset",
+    "calibration_split",
     "calibration_samples",
+    "calibration_sequence_length",
     "calibration_packing",
+    "evaluation_source",
+    "evaluation_dataset",
+    "evaluation_split",
+    "evaluation_samples",
+    "evaluation_sequence_length",
+    "evaluation_packing",
     "sequence_length",
     "output_dir",
 ]
@@ -299,9 +312,9 @@ def _render_html(rows: list[dict[str, str]]) -> str:
     <p>Lower perplexity is better. The delta column shows how far each row is from the best method at the same bit-width. Throughput is dense dequantized simulation throughput until packed int3/int4 kernels are added.</p>
     <section class="context">
       <div><span>Model</span>{html.escape(context["model"])}</div>
-      <div><span>Benchmark</span>{html.escape(context["benchmark"])}</div>
-      <div><span>Sequence length</span>{html.escape(context["sequence_length"])}</div>
-      <div><span>Calibration</span>{html.escape(context["calibration"])}</div>
+      <div><span>Evaluation Data</span>{html.escape(context["evaluation"])}</div>
+      <div><span>Calibration Data</span>{html.escape(context["calibration"])}</div>
+      <div><span>Model Size</span>{html.escape(context["model_size"])}</div>
     </section>
     <section class="winners">{cards}</section>
     <table>
@@ -317,7 +330,11 @@ def _render_html(rows: list[dict[str, str]]) -> str:
           <th>Ratio</th>
           <th>Tokens/s</th>
           <th>Quant Time</th>
-          <th>Calibration</th>
+          <th>FP16 Size</th>
+          <th>Quantized Size</th>
+          <th>Compression</th>
+          <th>Evaluation Data</th>
+          <th>Calibration Data</th>
         </tr>
       </thead>
       <tbody>{table_rows}</tbody>
@@ -341,10 +358,6 @@ def _render_winner_card(row: dict[str, str]) -> str:
 
 def _render_table_row(row: dict[str, str]) -> str:
     best = row.get("best_for_bits") == "yes"
-    calibration = (
-        f"{html.escape(str(row.get('calibration_samples', '')))} samples, "
-        f"packing={html.escape(str(row.get('calibration_packing', '')))}"
-    )
     cells = [
         '<span class="best-badge">yes</span>' if best else "",
         html.escape(str(row.get("bits", ""))),
@@ -356,7 +369,11 @@ def _render_table_row(row: dict[str, str]) -> str:
         _format_float(row.get("perplexity_ratio"), digits=3),
         _format_float(row.get("tokens_per_second"), digits=1),
         _format_float(row.get("quantization_seconds"), digits=2),
-        calibration,
+        _format_size_mb(row.get("fp16_weight_mb")),
+        _format_size_mb(row.get("estimated_quantized_mb")),
+        _format_compression(row.get("estimated_compression_ratio")),
+        _data_context(row, "evaluation", fallback=row.get("benchmark")),
+        _data_context(row, "calibration"),
     ]
     class_name = ' class="best"' if best else ""
     return f"<tr{class_name}>" + "".join(f"<td>{cell}</td>" for cell in cells) + "</tr>"
@@ -423,7 +440,7 @@ def _write_matplotlib_plots(rows: list[dict[str, str]], output_dir: Path, name: 
             axis.text(value, index, f"  {label}", va="center", ha="left", fontsize=9)
     context = _board_context(rows)
     fig.suptitle(
-        f"{context['model']} | {context['benchmark']} | seq {context['sequence_length']}",
+        f"{context['model']} | eval {context['evaluation']} | calib {context['calibration']}",
         fontsize=14,
         fontweight="bold",
     )
@@ -452,26 +469,98 @@ def _delta_label(delta: float, pct_delta: float) -> str:
 
 def _board_context(rows: list[dict[str, str]]) -> dict[str, str]:
     models = _unique_values(rows, "model_repo_id")
-    benchmarks = _unique_values(rows, "benchmark")
-    sequence_lengths = _unique_values(rows, "sequence_length")
-    calibration_samples = _unique_values(rows, "calibration_samples")
-    packing_values = _unique_values(rows, "calibration_packing")
-    calibration_parts = []
-    if calibration_samples:
-        calibration_parts.append(f"{', '.join(calibration_samples)} samples")
-    if packing_values:
-        calibration_parts.append(f"packing={', '.join(packing_values)}")
     return {
         "model": ", ".join(models) if models else "mixed models",
-        "benchmark": ", ".join(benchmarks) if benchmarks else "mixed benchmarks",
-        "sequence_length": ", ".join(sequence_lengths) if sequence_lengths else "mixed",
-        "calibration": "; ".join(calibration_parts) if calibration_parts else "mixed",
+        "evaluation": _combined_data_context(rows, "evaluation", fallback_key="benchmark"),
+        "calibration": _combined_data_context(rows, "calibration"),
+        "model_size": _model_size_context(rows),
     }
 
 
 def _unique_values(rows: list[dict[str, str]], key: str) -> list[str]:
     values = {str(row.get(key, "")).strip() for row in rows if str(row.get(key, "")).strip()}
     return sorted(values)
+
+
+def _data_context(row: dict[str, str], prefix: str, *, fallback: object | None = None) -> str:
+    dataset = str(row.get(f"{prefix}_dataset") or "").strip()
+    source = str(row.get(f"{prefix}_source") or "").strip()
+    split = str(row.get(f"{prefix}_split") or "").strip()
+    samples = str(row.get(f"{prefix}_samples") or "").strip()
+    sequence_length = str(row.get(f"{prefix}_sequence_length") or "").strip()
+    if prefix == "calibration" and not sequence_length:
+        sequence_length = str(row.get("sequence_length") or "").strip()
+    packing = str(row.get(f"{prefix}_packing") or "").strip()
+
+    fallback_label = str(fallback or "").strip()
+    label = dataset or source
+    parts = []
+    if fallback_label:
+        parts.append(fallback_label)
+    if label and label != fallback_label:
+        parts.append(label)
+    if split:
+        parts.append(split)
+    if samples:
+        parts.append(f"{samples} samples")
+    if sequence_length:
+        parts.append(f"seq {sequence_length}")
+    if packing:
+        parts.append(f"packing={packing}")
+    return html.escape(", ".join(parts))
+
+
+def _combined_data_context(
+    rows: list[dict[str, str]],
+    prefix: str,
+    *,
+    fallback_key: str | None = None,
+) -> str:
+    labels = _unique_values(rows, f"{prefix}_dataset")
+    fallback_labels = _unique_values(rows, fallback_key) if fallback_key is not None else []
+    samples = _unique_values(rows, f"{prefix}_samples")
+    sequence_lengths = _unique_values(rows, f"{prefix}_sequence_length")
+    if prefix == "calibration" and not sequence_lengths:
+        sequence_lengths = _unique_values(rows, "sequence_length")
+    packing_values = _unique_values(rows, f"{prefix}_packing")
+
+    parts = []
+    if fallback_labels:
+        parts.append(", ".join(fallback_labels))
+    if labels:
+        parts.append(", ".join(labels))
+    if samples:
+        parts.append(f"{', '.join(samples)} samples")
+    if sequence_lengths:
+        parts.append(f"seq {', '.join(sequence_lengths)}")
+    if packing_values:
+        parts.append(f"packing={', '.join(packing_values)}")
+    return "; ".join(parts) if parts else "not recorded"
+
+
+def _model_size_context(rows: list[dict[str, str]]) -> str:
+    fp16_sizes = [_float_or_nan(row.get("fp16_weight_mb")) for row in rows]
+    quant_sizes = [_float_or_nan(row.get("estimated_quantized_mb")) for row in rows]
+    compression = [_float_or_nan(row.get("estimated_compression_ratio")) for row in rows]
+    fp16_label = _numeric_range_label(fp16_sizes, formatter=_format_size_number)
+    quantized_label = _numeric_range_label(quant_sizes, formatter=_format_size_number)
+    compression_label = _numeric_range_label(compression, formatter=lambda value: f"{value:.2f}x")
+    return f"FP16 {fp16_label}; quantized {quantized_label}; compression {compression_label}"
+
+
+def _numeric_range_label(values: list[float], *, formatter) -> str:
+    finite = sorted({value for value in values if math.isfinite(value) and value > 0})
+    if not finite:
+        return "not recorded"
+    if len(finite) == 1:
+        return formatter(finite[0])
+    return f"{formatter(finite[0])}-{formatter(finite[-1])}"
+
+
+def _format_size_number(value: float) -> str:
+    if value >= 1024:
+        return f"{value / 1024:.2f} GB"
+    return f"{value:.1f} MB"
 
 
 def _method_family(method: object) -> str:
@@ -551,6 +640,20 @@ def _format_float(value: str | float | None, *, digits: int) -> str:
     if math.isnan(number):
         return ""
     return f"{number:.{digits}f}"
+
+
+def _format_size_mb(value: str | float | None) -> str:
+    number = _float_or_nan(value)
+    if math.isnan(number):
+        return ""
+    return _format_size_number(number)
+
+
+def _format_compression(value: str | float | None) -> str:
+    number = _float_or_nan(value)
+    if math.isnan(number):
+        return ""
+    return f"{number:.2f}x"
 
 
 def _float_or_nan(value: str | float | None) -> float:

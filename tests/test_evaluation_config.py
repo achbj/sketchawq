@@ -3,13 +3,14 @@ from __future__ import annotations
 import torch
 
 from sketchawq.config import SketchAWQConfig
+from sketchawq.data.calibration import TextBatchConfig
 from sketchawq.experiments import run_quantization
 
 
 def test_sketchawq_evaluation_batches_can_use_packed_validation(monkeypatch) -> None:
     captured: dict[str, object] = {}
 
-    def fake_make_calibration_batches(tokenizer, batch_config, *, device):
+    def fake_make_text_batches(tokenizer, batch_config, *, device):
         captured["tokenizer"] = tokenizer
         captured["batch_config"] = batch_config
         captured["device"] = device
@@ -17,8 +18,8 @@ def test_sketchawq_evaluation_batches_can_use_packed_validation(monkeypatch) -> 
 
     monkeypatch.setattr(
         run_quantization,
-        "make_calibration_batches",
-        fake_make_calibration_batches,
+        "make_text_batches",
+        fake_make_text_batches,
     )
     config = SketchAWQConfig()
     config.evaluation.use_calibration_data = False
@@ -36,6 +37,7 @@ def test_sketchawq_evaluation_batches_can_use_packed_validation(monkeypatch) -> 
     )
 
     batch_config = captured["batch_config"]
+    assert isinstance(batch_config, TextBatchConfig)
     assert batch_config.source == "dataset"
     assert batch_config.split == "validation"
     assert batch_config.num_samples == 128

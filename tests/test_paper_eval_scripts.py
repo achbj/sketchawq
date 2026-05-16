@@ -105,7 +105,7 @@ def test_every_model_bit_has_valid_sketchawq_and_gptq_configs() -> None:
         assert sketchawq.evaluation.packing == baseline.evaluation.packing
         assert sketchawq.evaluation.max_batches == baseline.evaluation.max_batches
         assert baseline.evaluation.benchmark_name.startswith("wikitext2_validation")
-        assert baseline.evaluation.max_batches in {64, 128}
+        assert baseline.evaluation.max_batches in {64, 128, 256}
         assert baseline.evaluation.measure_throughput
         assert sketchawq.output.run_name not in seen_run_names
         seen_run_names.add(sketchawq.output.run_name)
@@ -136,6 +136,31 @@ def test_qwen3_8b_c4_eval_configs_match_across_methods() -> None:
         assert sketchawq.evaluation.max_batches == baseline.evaluation.max_batches == 64
         assert sketchawq.evaluation.measure_throughput
         assert baseline.evaluation.measure_throughput
+
+
+def test_qwen3_1_7b_check_configs_use_1024_by_256_budget() -> None:
+    for bits, (sketchawq_config, gptq_config) in {
+        3: PAPER_EVAL_CONFIGS[("qwen3_1_7b", 3)],
+        4: PAPER_EVAL_CONFIGS[("qwen3_1_7b", 4)],
+    }.items():
+        sketchawq = load_config(PROJECT_ROOT / sketchawq_config)
+        baseline = load_baseline_config(PROJECT_ROOT / gptq_config)
+
+        assert sketchawq.model.repo_id == baseline.model.repo_id == "Qwen/Qwen3-1.7B-Base"
+        assert sketchawq.quantization.bits == baseline.quantization.bits == bits
+        assert sketchawq.calibration.dataset_name == baseline.calibration.dataset_name == "allenai/c4"
+        assert sketchawq.calibration.num_samples == baseline.calibration.num_samples == 256
+        assert sketchawq.calibration.sequence_length == baseline.calibration.sequence_length == 1024
+        assert sketchawq.calibration.packing == baseline.calibration.packing is True
+        assert sketchawq.evaluation.benchmark_name == baseline.evaluation.benchmark_name
+        assert sketchawq.evaluation.benchmark_name == "wikitext2_validation_packed_eval1024"
+        assert sketchawq.evaluation.num_samples == baseline.evaluation.num_samples == 256
+        assert sketchawq.evaluation.sequence_length == baseline.evaluation.sequence_length == 1024
+        assert sketchawq.evaluation.max_batches == baseline.evaluation.max_batches == 256
+        assert "_check_" in sketchawq.output.run_name
+        assert "_check_" in baseline.output.run_name
+        assert sketchawq.output.run_name.endswith("eval1024")
+        assert baseline.output.run_name.endswith("eval1024")
 
 
 def test_every_model_bit_has_wrapper_script() -> None:
@@ -268,10 +293,10 @@ def test_sync_results_script_dry_runs_qwen3_1_7b_both_bits_and_methods() -> None
         text=True,
     )
 
-    assert "modal volume get --force sketchawq-artifacts /qwen3_1_7b_3bit_qwen_final_packed_eval2048" in result.stdout
-    assert "modal volume get --force sketchawq-artifacts /qwen3_1_7b_gptq_3bit_eval2048" in result.stdout
-    assert "modal volume get --force sketchawq-artifacts /qwen3_1_7b_4bit_qwen_final_packed_eval2048" in result.stdout
-    assert "modal volume get --force sketchawq-artifacts /qwen3_1_7b_gptq_4bit_eval2048" in result.stdout
+    assert "modal volume get --force sketchawq-artifacts /qwen3_1_7b_3bit_qwen_check_packed_eval1024" in result.stdout
+    assert "modal volume get --force sketchawq-artifacts /qwen3_1_7b_gptq_3bit_check_eval1024" in result.stdout
+    assert "modal volume get --force sketchawq-artifacts /qwen3_1_7b_4bit_qwen_check_packed_eval1024" in result.stdout
+    assert "modal volume get --force sketchawq-artifacts /qwen3_1_7b_gptq_4bit_check_eval1024" in result.stdout
     assert "qwen3_1_7b_3_4bit_paper_eval_summary.csv" in result.stdout
 
 
