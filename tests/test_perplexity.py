@@ -52,3 +52,16 @@ def test_perplexity_ignores_padding_after_causal_shift() -> None:
     result = evaluate_perplexity(model, [batch], max_batches=1)
 
     assert result["loss"] < 1e-4
+
+
+def test_perplexity_can_run_without_batch_cap() -> None:
+    model = LogitOnlyLM()
+    batch = CalibrationBatch(
+        input_ids=torch.tensor([[1, 2, 3, 5]]),
+        attention_mask=torch.tensor([[1, 1, 1, 1]]),
+    )
+
+    result = evaluate_perplexity(model, [batch, batch], max_batches=None)
+
+    assert result["batches"] == 2.0
+    assert result["perplexity"] < 1.001

@@ -6,12 +6,17 @@ import torch
 import torch.nn.functional as F
 
 
-def evaluate_perplexity(model: torch.nn.Module, batches, *, max_batches: int) -> dict[str, float]:
+def evaluate_perplexity(
+    model: torch.nn.Module,
+    batches,
+    *,
+    max_batches: int | None,
+) -> dict[str, float]:
     model.eval()
     losses: list[float] = []
     with torch.no_grad():
         for index, batch in enumerate(batches):
-            if index >= max_batches:
+            if max_batches is not None and index >= max_batches:
                 break
             kwargs = batch.as_model_kwargs() if hasattr(batch, "as_model_kwargs") else batch
             labels = kwargs["input_ids"].clone()

@@ -37,7 +37,7 @@ class TextBatchConfig:
     dataset_config: str
     split: str
     text_column: str
-    num_samples: int
+    num_samples: int | None
     sequence_length: int
     seed: int
     packing: bool
@@ -73,10 +73,13 @@ class TextBatchConfig:
 
 def _iter_texts(config: TextBatchConfig, *, repeat_synthetic: bool = False) -> Iterable[str]:
     if config.source == "synthetic":
-        repeats = (config.num_samples // len(_SYNTHETIC_TEXTS)) + 1
-        source = cycle(_SYNTHETIC_TEXTS) if repeat_synthetic else iter(
-            (_SYNTHETIC_TEXTS * repeats)[: config.num_samples]
-        )
+        if config.num_samples is None:
+            source = cycle(_SYNTHETIC_TEXTS) if repeat_synthetic else iter(_SYNTHETIC_TEXTS)
+        else:
+            repeats = (config.num_samples // len(_SYNTHETIC_TEXTS)) + 1
+            source = cycle(_SYNTHETIC_TEXTS) if repeat_synthetic else iter(
+                (_SYNTHETIC_TEXTS * repeats)[: config.num_samples]
+            )
         for text in source:
             stripped = text.strip()
             if stripped:
@@ -84,7 +87,7 @@ def _iter_texts(config: TextBatchConfig, *, repeat_synthetic: bool = False) -> I
         return
 
     if config.source != "dataset":
-        raise ValueError("calibration.source must be either 'synthetic' or 'dataset'")
+        raise ValueError("text batch source must be either 'synthetic' or 'dataset'")
 
     dataset = load_dataset(config.dataset_name, config.dataset_config, split=config.split, streaming=True)
     for row in dataset:
@@ -115,7 +118,11 @@ def make_text_batches(
     if config.packing:
         return _make_packed_text_batches(tokenizer, config, device=device)
 
-    texts = list(islice(_iter_texts(config), config.num_samples))
+    texts = (
+        list(_iter_texts(config))
+        if config.num_samples is None
+        else list(islice(_iter_texts(config), config.num_samples))
+    )
     batches: list[CalibrationBatch] = []
 
     for text in texts:
@@ -142,7 +149,7 @@ def _make_packed_text_batches(
     device: torch.device,
 ) -> list[CalibrationBatch]:
     selected_chunks = _select_packed_chunks(tokenizer, config)
-    if len(selected_chunks) < config.num_samples:
+    if config.num_samples is not None and len(selected_chunks) < config.num_samples:
         raise RuntimeError(
             "Packed calibration produced "
             f"{len(selected_chunks)} chunks, but num_samples={config.num_samples}. "
@@ -158,6 +165,9 @@ def _make_packed_text_batches(
 
 
 def _select_packed_chunks(tokenizer, config: TextBatchConfig) -> list[list[int]]:
+    if config.num_samples is None:
+        return list(_iter_packed_chunks(tokenizer, config))
+
     if config.source == "synthetic":
         return list(
             islice(

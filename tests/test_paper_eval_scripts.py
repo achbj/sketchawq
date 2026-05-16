@@ -105,7 +105,11 @@ def test_every_model_bit_has_valid_sketchawq_and_gptq_configs() -> None:
         assert sketchawq.evaluation.packing == baseline.evaluation.packing
         assert sketchawq.evaluation.max_batches == baseline.evaluation.max_batches
         assert baseline.evaluation.benchmark_name.startswith("wikitext2_validation")
-        assert baseline.evaluation.max_batches in {64, 128, 256}
+        if baseline.evaluation.benchmark_name == "wikitext2_validation_packed_eval2048":
+            assert baseline.evaluation.num_samples is None
+            assert baseline.evaluation.max_batches is None
+        else:
+            assert baseline.evaluation.max_batches in {64, 128, 256}
         assert baseline.evaluation.measure_throughput
         assert sketchawq.output.run_name not in seen_run_names
         seen_run_names.add(sketchawq.output.run_name)
@@ -349,6 +353,6 @@ def test_qwen3_4b_paper_configs_use_focused_search_grids() -> None:
     four_bit = load_config(PROJECT_ROOT / "configs/paper/qwen3_4b_4bit.yaml")
 
     assert three_bit.quantization.awq_alpha_candidates == [0.0, 0.125, 0.25, 0.5]
-    assert three_bit.quantization.clip_candidates == [0.82, 0.8]
+    assert three_bit.quantization.clip_candidates == [0.82, 0.8, 0.79]
     assert four_bit.quantization.awq_alpha_candidates == [0.0, 0.1, 0.2, 0.3]
     assert four_bit.quantization.clip_candidates == [0.93, 0.9, 0.87, 0.85]

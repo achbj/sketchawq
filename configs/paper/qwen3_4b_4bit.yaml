@@ -6,7 +6,7 @@ model:
 
 quantization:
   bits: 4
-  group_size: 128
+  group_size: 64
   symmetric: true
   scale_clip_search: greedy
   awq_alpha_candidates: [0.0, 0.1, 0.2, 0.3]
@@ -49,10 +49,10 @@ evaluation:
   dataset_config: wikitext-2-raw-v1
   split: validation
   text_column: text
-  num_samples: 64
+  num_samples: null
   sequence_length: 2048
   packing: true
-  max_batches: 64
+  max_batches: null
   measure_throughput: true
 
 output:

@@ -311,19 +311,19 @@ class EvaluationConfig:
     dataset_config: str = "wikitext-2-raw-v1"
     split: str = "validation"
     text_column: str = "text"
-    num_samples: int = 32
+    num_samples: int | None = 32
     sequence_length: int = 1024
     packing: bool = False
-    max_batches: int = 4
+    max_batches: int | None = 4
     measure_throughput: bool = False
     throughput_warmup_batches: int = 1
 
     def validate(self) -> None:
-        if self.num_samples <= 0:
+        if self.num_samples is not None and self.num_samples <= 0:
             raise ValueError("evaluation.num_samples must be positive")
         if self.sequence_length <= 0:
             raise ValueError("evaluation.sequence_length must be positive")
-        if self.max_batches <= 0:
+        if self.max_batches is not None and self.max_batches <= 0:
             raise ValueError("evaluation.max_batches must be positive")
         if self.throughput_warmup_batches < 0:
             raise ValueError("evaluation.throughput_warmup_batches must be non-negative")

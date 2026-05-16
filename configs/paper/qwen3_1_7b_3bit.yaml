@@ -63,7 +63,7 @@ evaluation:
   measure_throughput: true
 
 output:
-  run_name: qwen3_4b_3bit_qwen_check_packed_eval1024
+  run_name: qwen3_1_7b_3bit_qwen_check_packed_eval1024
   output_dir: artifacts
   save_model: false
 

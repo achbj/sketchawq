@@ -172,3 +172,51 @@ evaluation:
     config = load_config(config_path)
 
     assert config.evaluation.packing is True
+
+
+def test_config_accepts_uncapped_evaluation(tmp_path) -> None:
+    config_path = tmp_path / "uncapped_eval.yaml"
+    config_path.write_text(
+        """
+evaluation:
+  use_calibration_data: false
+  source: dataset
+  num_samples: null
+  sequence_length: 2048
+  max_batches: null
+  packing: true
+""",
+        encoding="utf-8",
+    )
+
+    config = load_config(config_path)
+
+    assert config.evaluation.num_samples is None
+    assert config.evaluation.max_batches is None
+
+
+def test_packed_text_batches_with_no_sample_cap_use_all_chunks(monkeypatch) -> None:
+    monkeypatch.setattr(
+        calibration,
+        "_SYNTHETIC_TEXTS",
+        ["alpha beta", "gamma delta", "epsilon zeta"],
+    )
+    tokenizer = WhitespaceTokenizer()
+    config = TextBatchConfig(
+        source="synthetic",
+        dataset_name="",
+        dataset_config="",
+        split="validation",
+        text_column="text",
+        num_samples=None,
+        sequence_length=3,
+        seed=123,
+        packing=True,
+    )
+
+    batches = make_text_batches(tokenizer, config, device=torch.device("cpu"))
+
+    assert len(batches) == 3
+    torch.testing.assert_close(batches[0].input_ids, torch.tensor([[1, 2, 99]]))
+    torch.testing.assert_close(batches[1].input_ids, torch.tensor([[3, 4, 99]]))
+    torch.testing.assert_close(batches[2].input_ids, torch.tensor([[5, 6, 99]]))

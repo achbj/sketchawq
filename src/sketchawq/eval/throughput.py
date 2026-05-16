@@ -10,10 +10,10 @@ def measure_forward_tokens_per_second(
     batches,
     *,
     warmup: int = 1,
-    max_batches: int = 8,
+    max_batches: int | None = 8,
 ) -> dict[str, float]:
     model.eval()
-    selected = list(batches)[:max_batches]
+    selected = list(batches) if max_batches is None else list(batches)[:max_batches]
     if not selected:
         return {"tokens_per_second": 0.0, "elapsed_seconds": 0.0, "tokens": 0.0}
 
