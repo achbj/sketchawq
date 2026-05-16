@@ -333,8 +333,6 @@ def _render_html(rows: list[dict[str, str]]) -> str:
           <th>FP16 Size</th>
           <th>Quantized Size</th>
           <th>Compression</th>
-          <th>Evaluation Data</th>
-          <th>Calibration Data</th>
         </tr>
       </thead>
       <tbody>{table_rows}</tbody>
@@ -350,9 +348,10 @@ def _render_winner_card(row: dict[str, str]) -> str:
     method = html.escape(str(row.get("display_method") or row.get("method", "")))
     ppl = _format_float(row.get("perplexity"), digits=3)
     ratio = _format_float(row.get("perplexity_ratio"), digits=3)
+    note = html.escape(str(row.get("comparison_note", "")))
     return f"""<article class="card">
   <strong>{bits}-bit winner: {method}</strong>
-  <div>PPL {ppl}; ratio {ratio}x; {html.escape(str(row.get("comparison_note", "")))}</div>
+  <div>PPL {ppl} &nbsp;&middot;&nbsp; {ratio}x vs FP16 &nbsp;&middot;&nbsp; {note}</div>
 </article>"""
 
 
@@ -372,8 +371,6 @@ def _render_table_row(row: dict[str, str]) -> str:
         _format_size_mb(row.get("fp16_weight_mb")),
         _format_size_mb(row.get("estimated_quantized_mb")),
         _format_compression(row.get("estimated_compression_ratio")),
-        _data_context(row, "evaluation", fallback=row.get("benchmark")),
-        _data_context(row, "calibration"),
     ]
     class_name = ' class="best"' if best else ""
     return f"<tr{class_name}>" + "".join(f"<td>{cell}</td>" for cell in cells) + "</tr>"
@@ -533,9 +530,9 @@ def _combined_data_context(
         parts.append(f"{', '.join(samples)} samples")
     if sequence_lengths:
         parts.append(f"seq {', '.join(sequence_lengths)}")
-    if packing_values:
-        parts.append(f"packing={', '.join(packing_values)}")
-    return "; ".join(parts) if parts else "not recorded"
+    if packing_values and any(v.lower() == "true" for v in packing_values):
+        parts.append("packed")
+    return " · ".join(parts) if parts else "not recorded"
 
 
 def _model_size_context(rows: list[dict[str, str]]) -> str:
