@@ -298,7 +298,6 @@ def collect_layer_stats(
     row_sampling: str = "random",
     mask_mismatch_action: str = "warn",
     activation_sample_rows: int = 0,
-    finalize_to_cpu: bool = True,
 ) -> dict[str, LayerStats]:
     observer = ActivationObserver(
         sketch_rank=sketch_rank,
@@ -321,7 +320,6 @@ def collect_layer_stats(
                     observer.set_attention_mask(None)
     finally:
         observer.remove()
-    if finalize_to_cpu:
-        for stats in observer.stats.values():
-            stats.move_to_cpu()
+    for stats in observer.stats.values():
+        stats.move_to_cpu()
     return observer.stats

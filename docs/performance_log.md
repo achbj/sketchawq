@@ -62,3 +62,24 @@ Compared with the earlier balanced bundle `artifacts/paper_eval/OLD/qwen3_4b_3_4
 The accumulator change reduced stats time by about 20-22%, but it did not collapse the phase to the hoped-for range. The remaining stats cost is likely dominated by model forward passes, per-layer row sampling, and the sketch matrix products inside hooks.
 
 The 4-bit PPL regression is probably confounded by the search-grid edit. The earlier 4-bit search used exact `0.1` alpha and allowed higher clip ratios such as `0.9`/`0.93`; the latest grid narrowed alpha and clip candidates around lower values.
+
+## 2026-05-17 - Reverted tensor-score search experiment
+
+### Context
+
+We tried keeping search stats on GPU through layer quantization and batching candidate score selection so each scale/clip search synchronized once per stage. The goal was to reduce `layer_quantization_seconds`.
+
+### Result
+
+The experiment did not improve runtime. Recent Qwen3-4B bundles showed layer time staying flat or increasing:
+
+| Bundle | Bits | Quant time | Stats time | Layer time | PPL |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| `20260517_192225` | 3 | 188.70s | 165.42s | 22.48s | 17.7015 |
+| `20260517_203358` | 3 | 200.57s | 174.82s | 24.93s | 17.7015 |
+| `20260517_192225` | 4 | 165.70s | 143.34s | 21.87s | 16.0346 |
+| `20260517_203358` | 4 | 187.14s | 165.02s | 21.55s | 16.0291 |
+
+### Decision
+
+Reverted the tensor-score search path and the pipeline GPU-cache management experiment. Keep the earlier GPU-resident calibration accumulator change, because that had a measurable stats-time improvement. Next speed work should target calibration batching rather than layer-search score synchronization.

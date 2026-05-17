@@ -6,7 +6,7 @@ import torch
 
 from sketchawq.config import OutlierConfig, QuantizationConfig, SketchConfig
 from sketchawq.quant.hessian_sketch import HessianSketch
-from sketchawq.quant.loss import output_error_score_tensor, weighted_error_score_tensor
+from sketchawq.quant.loss import output_error_score, weighted_error_score
 from sketchawq.quant.outliers import (
     OutlierSelection,
     _column_mean_abs,
@@ -92,8 +92,6 @@ def search_awq_scale_and_clip(
         )
 
     best: ScaleClipSearchResult | None = None
-    candidates: list[tuple[torch.Tensor, float, float]] = []
-    scores: list[torch.Tensor] = []
     for alpha in quant_config.awq_alpha_candidates:
         scales = make_awq_scales(
             weight,
@@ -127,20 +125,18 @@ def search_awq_scale_and_clip(
                 sketch_config=sketch_config,
                 activation_rows=activation_rows,
             )
-            candidates.append((scales, float(alpha), float(clip_ratio)))
-            scores.append(score)
-    if not candidates:
+            result = ScaleClipSearchResult(
+                scales=scales.cpu(),
+                alpha=float(alpha),
+                clip_ratio=float(clip_ratio),
+                score=score,
+                scale_score=None,
+                clip_score=None,
+            )
+            if best is None or result.score < best.score:
+                best = result
+    if best is None:
         raise RuntimeError("No AWQ scale/clip candidates were evaluated.")
-    best_index, best_score = _best_score(scores)
-    best_scales, best_alpha, best_clip_ratio = candidates[best_index]
-    best = ScaleClipSearchResult(
-        scales=best_scales.detach(),
-        alpha=best_alpha,
-        clip_ratio=best_clip_ratio,
-        score=best_score,
-        scale_score=None,
-        clip_score=None,
-    )
     return best
 
 
@@ -164,8 +160,6 @@ def search_awq_scales(
             outlier_config,
         )
     best: ScaleSearchResult | None = None
-    candidates: list[tuple[torch.Tensor, float]] = []
-    scores: list[torch.Tensor] = []
     for alpha in quant_config.awq_alpha_candidates:
         scales = make_awq_scales(
             weight,
@@ -198,13 +192,11 @@ def search_awq_scales(
             sketch_config=sketch_config,
             activation_rows=activation_rows,
         )
-        candidates.append((scales, float(alpha)))
-        scores.append(score)
-    if not candidates:
+        result = ScaleSearchResult(scales=scales.cpu(), alpha=float(alpha), score=score)
+        if best is None or result.score < best.score:
+            best = result
+    if best is None:
         raise RuntimeError("No AWQ scale candidates were evaluated.")
-    best_index, best_score = _best_score(scores)
-    best_scales, best_alpha = candidates[best_index]
-    best = ScaleSearchResult(scales=best_scales.detach(), alpha=best_alpha, score=best_score)
     return best
 
 
@@ -268,10 +260,10 @@ def _candidate_search_score(
     quant_config: QuantizationConfig,
     sketch_config: SketchConfig,
     activation_rows: torch.Tensor | None = None,
-) -> torch.Tensor:
+) -> float:
     weighted_score = None
     if quant_config.search_objective in {"weighted_error", "hybrid"}:
-        weighted_score = weighted_error_score_tensor(
+        weighted_score = weighted_error_score(
             weight,
             candidate,
             diagonal=sketch.diagonal,
@@ -281,12 +273,12 @@ def _candidate_search_score(
         )
     if quant_config.search_objective == "weighted_error":
         assert weighted_score is not None
-        return _as_score_tensor(weighted_score, device=weight.device)
+        return float(weighted_score)
 
     if activation_rows is None or activation_rows.numel() == 0:
         if weighted_score is not None:
-            return _as_score_tensor(weighted_score, device=weight.device)
-        return weighted_error_score_tensor(
+            return float(weighted_score)
+        return weighted_error_score(
             weight,
             candidate,
             diagonal=sketch.diagonal,
@@ -295,32 +287,17 @@ def _candidate_search_score(
             normalize_terms=sketch_config.normalize_error_terms,
         )
 
-    output_score = output_error_score_tensor(
+    output_score = output_error_score(
         weight,
         candidate,
         activation_rows,
         normalize_terms=sketch_config.normalize_error_terms,
     )
     if quant_config.search_objective == "output_error":
-        return _as_score_tensor(output_score, device=weight.device)
+        return float(output_score)
 
     assert weighted_score is not None
-    return _as_score_tensor(
-        quant_config.hessian_error_weight * _as_score_tensor(weighted_score, device=weight.device)
-        + quant_config.output_error_weight * _as_score_tensor(output_score, device=weight.device),
-        device=weight.device,
+    return float(
+        quant_config.hessian_error_weight * weighted_score
+        + quant_config.output_error_weight * output_score
     )
-
-
-def _as_score_tensor(score: torch.Tensor | float, *, device: torch.device) -> torch.Tensor:
-    if isinstance(score, torch.Tensor):
-        return score.detach().to(device=device)
-    return torch.tensor(float(score), device=device)
-
-
-def _best_score(scores: list[torch.Tensor]) -> tuple[int, float]:
-    if not scores:
-        raise RuntimeError("No search scores were evaluated.")
-    stacked = torch.stack([score.reshape(()) for score in scores])
-    best_score, best_index = torch.min(stacked, dim=0)
-    return int(best_index.detach().cpu()), float(best_score.detach().cpu())

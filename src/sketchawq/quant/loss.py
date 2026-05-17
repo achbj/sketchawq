@@ -12,29 +12,6 @@ def weighted_error_score(
     low_rank_weight: float = 0.15,
     normalize_terms: bool = True,
 ) -> float:
-    return float(
-        weighted_error_score_tensor(
-            original,
-            candidate,
-            diagonal=diagonal,
-            basis=basis,
-            low_rank_weight=low_rank_weight,
-            normalize_terms=normalize_terms,
-        )
-        .detach()
-        .cpu()
-    )
-
-
-def weighted_error_score_tensor(
-    original: torch.Tensor,
-    candidate: torch.Tensor,
-    *,
-    diagonal: torch.Tensor | None = None,
-    basis: torch.Tensor | None = None,
-    low_rank_weight: float = 0.15,
-    normalize_terms: bool = True,
-) -> torch.Tensor:
     """Approximate expected layer-output error from weight reconstruction error.
 
     The diagonal term estimates sum_j H_jj * ||error[:, j]||^2.
@@ -69,7 +46,7 @@ def weighted_error_score_tensor(
             low_rank_score = low_rank_score / low_rank_denominator
         score = score + low_rank_weight * low_rank_score
 
-    return score.detach()
+    return float(score.detach().cpu())
 
 
 def output_error_score(
@@ -79,29 +56,10 @@ def output_error_score(
     *,
     normalize_terms: bool = True,
 ) -> float:
-    return float(
-        output_error_score_tensor(
-            original,
-            candidate,
-            activation_rows,
-            normalize_terms=normalize_terms,
-        )
-        .detach()
-        .cpu()
-    )
-
-
-def output_error_score_tensor(
-    original: torch.Tensor,
-    candidate: torch.Tensor,
-    activation_rows: torch.Tensor,
-    *,
-    normalize_terms: bool = True,
-) -> torch.Tensor:
     """Measure direct layer-output reconstruction error on sampled activations."""
     rows = activation_rows.detach()
     if rows.numel() == 0:
-        return weighted_error_score_tensor(
+        return weighted_error_score(
             original,
             candidate,
             diagonal=None,
@@ -118,4 +76,4 @@ def output_error_score_tensor(
         output = original_float @ rows.transpose(0, 1)
         denominator = output.pow(2).mean().clamp_min(1e-12)
         score = score / denominator
-    return score.detach()
+    return float(score.detach().cpu())
