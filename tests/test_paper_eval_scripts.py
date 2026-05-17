@@ -309,7 +309,7 @@ def test_sync_results_script_dry_runs_qwen3_8b_both_bits_and_methods() -> None:
         text=True,
     )
 
-    assert "modal volume get --force sketchawq-artifacts /qwen3_8b_3bit_qwen_final_packed_eval2048" in result.stdout
+    assert "modal volume get --force sketchawq-artifacts /qwen3_8b_3bit_qwen_gptq_fair_packed_eval2048" in result.stdout
     assert "modal volume get --force sketchawq-artifacts /qwen3_8b_gptq_3bit_eval2048" in result.stdout
     assert "modal volume get --force sketchawq-artifacts /qwen3_8b_4bit_qwen_final_packed_eval2048" in result.stdout
     assert "modal volume get --force sketchawq-artifacts /qwen3_8b_gptq_4bit_eval2048" in result.stdout
@@ -398,7 +398,7 @@ def test_sync_results_script_dry_runs_qwen3_8b_c4_eval() -> None:
         text=True,
     )
 
-    assert "modal volume get --force sketchawq-artifacts /qwen3_8b_3bit_qwen_final_c4_eval2048" in result.stdout
+    assert "modal volume get --force sketchawq-artifacts /qwen3_8b_3bit_qwen_gptq_fair_c4_eval2048" in result.stdout
     assert "modal volume get --force sketchawq-artifacts /qwen3_8b_gptq_3bit_c4_eval2048" in result.stdout
     assert "modal volume get --force sketchawq-artifacts /qwen3_8b_4bit_qwen_final_c4_eval2048" in result.stdout
     assert "modal volume get --force sketchawq-artifacts /qwen3_8b_gptq_4bit_c4_eval2048" in result.stdout
@@ -406,13 +406,18 @@ def test_sync_results_script_dry_runs_qwen3_8b_c4_eval() -> None:
     assert "qwen3_8b_3_4bit_c4_eval_summary.csv" in result.stdout
 
 
-def test_qwen3_8b_paper_configs_use_focused_search_grids() -> None:
+def test_qwen3_8b_paper_configs_match_gptq_fair_comparison_shape() -> None:
     three_bit = load_config(PROJECT_ROOT / "configs/paper/qwen3_8b_3bit.yaml")
     four_bit = load_config(PROJECT_ROOT / "configs/paper/qwen3_8b_4bit.yaml")
 
+    assert three_bit.quantization.group_size == 128
+    assert three_bit.quantization.search_objective == "weighted_error"
+    assert three_bit.quantization.output_error_rows == 0
     assert three_bit.quantization.awq_alpha_candidates == [0.0, 0.125, 0.25]
     assert three_bit.quantization.clip_candidates == [0.85, 0.82, 0.8]
-    assert four_bit.quantization.awq_alpha_candidates == [0.0, 0.1, 0.2]
+    assert four_bit.quantization.group_size == 128
+    assert four_bit.quantization.search_objective == "weighted_error"
+    assert four_bit.quantization.awq_alpha_candidates == [0.0, 0.1, 0.2, 0.3]
     assert four_bit.quantization.clip_candidates == [0.93, 0.9, 0.87, 0.85]
 
 

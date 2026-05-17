@@ -6,13 +6,10 @@ model:
 
 quantization:
   bits: 3
-  group_size: 64
+  group_size: 128
   symmetric: true
   scale_clip_search: greedy
-  search_objective: hybrid
-  output_error_rows: 64
-  output_error_weight: 1.0
-  hessian_error_weight: 1.0
+  search_objective: weighted_error
   awq_scale_normalization: geometric_mean
   awq_min_scale: 0.125
   awq_max_scale: 8.0
@@ -63,7 +60,7 @@ evaluation:
   measure_throughput: true
 
 output:
-  run_name: qwen3_8b_3bit_qwen_final_packed_eval2048
+  run_name: qwen3_8b_3bit_qwen_gptq_fair_packed_eval2048
   output_dir: artifacts
   save_model: false
 
