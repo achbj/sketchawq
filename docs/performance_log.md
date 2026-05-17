@@ -62,25 +62,3 @@ Compared with the earlier balanced bundle `artifacts/paper_eval/OLD/qwen3_4b_3_4
 The accumulator change reduced stats time by about 20-22%, but it did not collapse the phase to the hoped-for range. The remaining stats cost is likely dominated by model forward passes, per-layer row sampling, and the sketch matrix products inside hooks.
 
 The 4-bit PPL regression is probably confounded by the search-grid edit. The earlier 4-bit search used exact `0.1` alpha and allowed higher clip ratios such as `0.9`/`0.93`; the latest grid narrowed alpha and clip candidates around lower values.
-
-## 2026-05-17 - GPU-resident search stats and tensor candidate scores
-
-### Context
-
-After GPU-resident collection, stats were still moved back to CPU before sketch preparation and per-layer search. The search code also converted every candidate score to a Python float, forcing a GPU synchronization for each alpha/clip candidate.
-
-### Change
-
-- `collect_layer_stats` now accepts `finalize_to_cpu`; the public default remains `true`, while the quantization pipeline passes `false`.
-- The pipeline keeps `LayerStats` and `HessianSketch` tensors on the model device through each layer's quantization, then moves that layer's cache back to CPU after it is no longer needed.
-- `weighted_error_score_tensor` and `output_error_score_tensor` keep scalar scores on-device.
-- AWQ scale/clip search now stacks candidate score tensors and synchronizes once per search stage to select the best candidate, rather than converting each candidate score to a Python float.
-
-### Expected impact
-
-This should mostly affect `layer_quantization_seconds`, not `collect_stats_seconds`. The previous Qwen3-4B layer search phase was only about 22 seconds, so the absolute win is expected to be modest.
-
-### Verification
-
-- Focused tests passed: observer, search, tiny pipeline, Hessian sketch, and reporting metrics.
-- Full suite result: one known Qwen3-4B paper-config expectation failure remains because the current config search grid differs from the checked-in test expectation.

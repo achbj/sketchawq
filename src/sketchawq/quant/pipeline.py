@@ -12,8 +12,8 @@ from sketchawq.config import SketchAWQConfig
 from sketchawq.models.layers import iter_named_linears
 from sketchawq.quant.adaptive import LayerAdaptiveInput, build_layer_adaptive_plans
 from sketchawq.quant.awq_scale_search import search_awq_scale_and_clip
-from sketchawq.quant.hessian_sketch import HessianSketch, build_hessian_sketch
-from sketchawq.quant.observer import LayerStats, collect_layer_stats
+from sketchawq.quant.hessian_sketch import build_hessian_sketch
+from sketchawq.quant.observer import collect_layer_stats
 from sketchawq.quant.outliers import (
     apply_outlier_policy_to_candidate,
     select_outlier_channels,
@@ -141,7 +141,6 @@ def quantize_model(
         row_sampling=config.sketch.row_sampling,
         mask_mismatch_action=config.sketch.mask_mismatch_action,
         activation_sample_rows=config.quantization.output_error_rows,
-        finalize_to_cpu=False,
     )
     timings["collect_stats_seconds"] = time.perf_counter() - phase_start
 
@@ -167,7 +166,6 @@ def quantize_model(
             )
         )
     adaptive_plans = build_layer_adaptive_plans(adaptive_inputs, config)
-    adaptive_inputs.clear()
     timings["prepare_sketches_seconds"] = time.perf_counter() - phase_start
     LOGGER.info("Quantizing %d Linear layers", len(named_linears))
     method = _method_label(config)
@@ -178,7 +176,6 @@ def quantize_model(
         stats = stats_by_name.get(name)
         if stats is None or stats.count == 0:
             LOGGER.warning("Skipping %s because no calibration activations were observed", name)
-            _finalize_layer_cache(stats_by_name, sketches_by_name, name)
             continue
 
         weight = module.weight.detach()
@@ -323,7 +320,6 @@ def quantize_model(
                 protected_channels=protected_channels,
             )
         )
-        _finalize_layer_cache(stats_by_name, sketches_by_name, name)
 
     timings["layer_quantization_seconds"] = time.perf_counter() - phase_start
     timings["layer_elapsed_sum_seconds"] = sum(layer.layer_elapsed_seconds for layer in summaries)
@@ -350,19 +346,6 @@ def quantize_model(
         layers=summaries,
         packed_layers=packed_layers,
     )
-
-
-def _finalize_layer_cache(
-    stats_by_name: dict[str, LayerStats],
-    sketches_by_name: dict[str, HessianSketch],
-    name: str,
-) -> None:
-    stats = stats_by_name.get(name)
-    if stats is not None:
-        stats.move_to_cpu()
-    sketch = sketches_by_name.get(name)
-    if sketch is not None:
-        sketches_by_name[name] = sketch.to_cpu()
 
 
 def _estimate_quantized_storage(

@@ -91,6 +91,7 @@ def search_awq_scale_and_clip(
             clip_score=clip_result.score,
         )
 
+    best: ScaleClipSearchResult | None = None
     candidates: list[tuple[torch.Tensor, float, float]] = []
     scores: list[torch.Tensor] = []
     for alpha in quant_config.awq_alpha_candidates:
@@ -132,7 +133,7 @@ def search_awq_scale_and_clip(
         raise RuntimeError("No AWQ scale/clip candidates were evaluated.")
     best_index, best_score = _best_score(scores)
     best_scales, best_alpha, best_clip_ratio = candidates[best_index]
-    return ScaleClipSearchResult(
+    best = ScaleClipSearchResult(
         scales=best_scales.detach(),
         alpha=best_alpha,
         clip_ratio=best_clip_ratio,
@@ -140,6 +141,7 @@ def search_awq_scale_and_clip(
         scale_score=None,
         clip_score=None,
     )
+    return best
 
 
 def search_awq_scales(
@@ -161,6 +163,7 @@ def search_awq_scales(
             sketch,
             outlier_config,
         )
+    best: ScaleSearchResult | None = None
     candidates: list[tuple[torch.Tensor, float]] = []
     scores: list[torch.Tensor] = []
     for alpha in quant_config.awq_alpha_candidates:
@@ -201,7 +204,8 @@ def search_awq_scales(
         raise RuntimeError("No AWQ scale candidates were evaluated.")
     best_index, best_score = _best_score(scores)
     best_scales, best_alpha = candidates[best_index]
-    return ScaleSearchResult(scales=best_scales.detach(), alpha=best_alpha, score=best_score)
+    best = ScaleSearchResult(scales=best_scales.detach(), alpha=best_alpha, score=best_score)
+    return best
 
 
 def make_awq_scales(
