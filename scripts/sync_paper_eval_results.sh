@@ -20,8 +20,8 @@ Models:
 Options:
   --method sketchawq|gptq|both  Which result folders to sync. Default: both
   --volume NAME                  Modal volume name. Default: sketchawq-artifacts
-  --output-dir DIR               Local artifact download root. Default: artifacts/modal
-  --results-dir DIR              Local tables/plots output root. Default: artifacts/paper_eval
+  --output-dir DIR               Local artifact download bundle root. Default: artifacts/modal
+  --results-dir DIR              Local tables/plots bundle root. Default: artifacts/paper_eval
   --name NAME                    Output file stem. Default: <model>_<bits>_paper_eval
   --eval wikitext|c4             Evaluation suite. Default: wikitext
   --no-plots                     Only download artifacts; skip tables and plots
@@ -30,6 +30,7 @@ Options:
 
 Environment:
   MODAL_BIN                      Optional Modal CLI path. Useful when modal is in a conda env.
+  SKETCHAWQ_SYNC_TIMESTAMP       Optional timestamp override for deterministic bundle names.
 
 Examples:
   scripts/sync_paper_eval_results.sh qwen3_8b both --method both --eval c4
@@ -204,6 +205,42 @@ run_or_print() {
   fi
 }
 
+sync_timestamp() {
+  if [[ -n "${SKETCHAWQ_SYNC_TIMESTAMP:-}" ]]; then
+    echo "$SKETCHAWQ_SYNC_TIMESTAMP"
+  else
+    date +%Y%m%d_%H%M%S
+  fi
+}
+
+unique_bundle_name() {
+  local base="$1"
+  local stamp="$2"
+  local output_root="$3"
+  local results_root="$4"
+  local candidate="${base}_${stamp}"
+  local index
+  local suffix
+
+  if [[ ! -e "${output_root%/}/${candidate}" && ! -e "${results_root%/}/${candidate}" ]]; then
+    echo "$candidate"
+    return
+  fi
+
+  index=2
+  while [[ "$index" -le 999 ]]; do
+    printf -v suffix "%02d" "$index"
+    candidate="${base}_${stamp}_${suffix}"
+    if [[ ! -e "${output_root%/}/${candidate}" && ! -e "${results_root%/}/${candidate}" ]]; then
+      echo "$candidate"
+      return
+    fi
+    index=$((index + 1))
+  done
+
+  die "could not find an unused sync bundle name for '${base}_${stamp}'"
+}
+
 sync_config() {
   local modal_bin="$1"
   local config="$2"
@@ -218,14 +255,36 @@ sync_config() {
   run_or_print "$modal_bin" volume get --force "$volume" "/${run_name}" "$output_dir"
 }
 
+should_plot_search_choices() {
+  local path
+
+  [[ "$has_sketchawq_results" == "1" ]] || return 1
+  [[ "$dry_run" == "1" ]] && return 0
+
+  for path in "${synced_paths[@]}"; do
+    if [[ -f "${path%/}/layer_metrics.csv" ]]; then
+      return 0
+    fi
+  done
+
+  return 1
+}
+
 build_result_artifacts() {
   local first_config="$1"
   local model_repo_id
+  local model_label
   local benchmark
+  local search_choices_name
   local -a python_env
 
   model_repo_id="$(config_value "$first_config" "model.repo_id")"
+  model_label="${model_repo_id##*/}"
   benchmark="$(config_value "$first_config" "evaluation.benchmark_name")"
+  search_choices_name="${model}_search_choices"
+  if [[ "$eval_suite" != "wikitext" ]]; then
+    search_choices_name="${model}_${eval_suite}_search_choices"
+  fi
   python_env=(env "PYTHONPATH=src${PYTHONPATH:+:$PYTHONPATH}")
 
   run_or_print mkdir -p "$results_dir"
@@ -244,6 +303,13 @@ build_result_artifacts() {
     --benchmark "$benchmark" \
     --output-dir "$results_dir" \
     --name "$name"
+  if should_plot_search_choices; then
+    run_or_print "${python_env[@]}" python -m sketchawq.experiments.plot_search_choices \
+      "${synced_paths[@]}" \
+      --output-dir "$results_dir" \
+      --name "$search_choices_name" \
+      --title "${model_label} SketchAWQ search choices by layer"
+  fi
 }
 
 if [[ "${1:-}" == "-h" || "${1:-}" == "--help" ]]; then
@@ -330,12 +396,18 @@ esac
 modal_bin="$(resolve_modal_bin)"
 synced_paths=()
 first_config=""
+has_sketchawq_results="0"
+bundle_base="${name//\//_}"
+bundle_name="$(unique_bundle_name "$bundle_base" "$(sync_timestamp)" "$output_dir" "$results_dir")"
+output_dir="${output_dir%/}/${bundle_name}/runs"
+results_dir="${results_dir%/}/${bundle_name}"
 
 for bits in $(bits_to_list "$bits_selector"); do
   case "$method" in
     sketchawq)
       config="$(sketchawq_config "$model" "$bits" "$eval_suite")"
       [[ -n "$first_config" ]] || first_config="$config"
+      has_sketchawq_results="1"
       sync_config "$modal_bin" "$config"
       ;;
     gptq)
@@ -346,6 +418,7 @@ for bits in $(bits_to_list "$bits_selector"); do
     both)
       config="$(sketchawq_config "$model" "$bits" "$eval_suite")"
       [[ -n "$first_config" ]] || first_config="$config"
+      has_sketchawq_results="1"
       sync_config "$modal_bin" "$config"
       sync_config "$modal_bin" "$(gptq_config "$model" "$bits" "$eval_suite")"
       ;;
@@ -354,4 +427,11 @@ done
 
 if [[ "$plots" == "1" ]]; then
   build_result_artifacts "$first_config"
+fi
+
+if [[ "$dry_run" != "1" ]]; then
+  echo "Synced run artifacts to ${output_dir}"
+  if [[ "$plots" == "1" ]]; then
+    echo "Wrote comparison artifacts to ${results_dir}"
+  fi
 fi

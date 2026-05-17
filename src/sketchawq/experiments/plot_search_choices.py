@@ -53,6 +53,7 @@ def main() -> None:
     parser.add_argument("inputs", nargs="+", help="Artifacts roots, run dirs, or layer_metrics.csv files.")
     parser.add_argument("--output-dir", default="artifacts/search_choices")
     parser.add_argument("--name", default="search_choices")
+    parser.add_argument("--title", default="SketchAWQ search choices by layer")
     args = parser.parse_args()
 
     rows = build_choice_rows(load_layer_rows(args.inputs))
@@ -63,7 +64,7 @@ def main() -> None:
     output_dir.mkdir(parents=True, exist_ok=True)
     summary = summarize_choices(rows)
     csv_paths = write_choice_csvs(rows, summary, output_dir, args.name)
-    plot_paths = write_choice_plots(rows, output_dir, args.name)
+    plot_paths = write_choice_plots(rows, output_dir, args.name, title=args.title)
 
     for path in csv_paths + plot_paths:
         print(f"Wrote {path}")
@@ -136,7 +137,13 @@ def write_choice_csvs(
     return [layer_path, summary_path]
 
 
-def write_choice_plots(rows: list[dict[str, str]], output_dir: Path, name: str) -> list[Path]:
+def write_choice_plots(
+    rows: list[dict[str, str]],
+    output_dir: Path,
+    name: str,
+    *,
+    title: str = "SketchAWQ search choices by layer",
+) -> list[Path]:
     try:
         import matplotlib.pyplot as plt
     except Exception:
@@ -168,7 +175,7 @@ def write_choice_plots(rows: list[dict[str, str]], output_dir: Path, name: str) 
             "#7a8795",
         )
 
-    fig.suptitle("Qwen3-8B SketchAWQ search choices by layer", fontsize=18, fontweight="bold")
+    fig.suptitle(title, fontsize=18, fontweight="bold")
     fig.tight_layout(rect=(0, 0, 1, 0.95))
     png_path = output_dir / f"{name}.png"
     pdf_path = output_dir / f"{name}.pdf"

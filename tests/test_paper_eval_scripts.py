@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import os
+import re
 import subprocess
 from pathlib import Path
 
@@ -315,7 +317,13 @@ def test_sync_results_script_dry_runs_qwen3_8b_both_bits_and_methods() -> None:
     assert "modal volume get --force sketchawq-artifacts /qwen3_8b_gptq_4bit_eval2048" in result.stdout
     assert "sketchawq.experiments.compare_methods" in result.stdout
     assert "sketchawq.experiments.plot_benchmark_board" in result.stdout
+    assert "sketchawq.experiments.plot_search_choices" in result.stdout
     assert "qwen3_8b_3_4bit_paper_eval_summary.csv" in result.stdout
+    assert re.search(
+        r"artifacts/paper_eval/qwen3_8b_3_4bit_paper_eval_\d{8}_\d{6}/"
+        r"qwen3_8b_3_4bit_paper_eval_summary\.csv",
+        result.stdout,
+    )
 
 
 def test_sync_results_script_dry_runs_qwen3_1_7b_both_bits_and_methods() -> None:
@@ -385,6 +393,42 @@ def test_sync_results_script_can_skip_plot_generation() -> None:
 
     assert "modal volume get --force sketchawq-artifacts /qwen3_8b_gptq_3bit_eval2048" in result.stdout
     assert "sketchawq.experiments.plot_benchmark_board" not in result.stdout
+    assert "sketchawq.experiments.plot_search_choices" not in result.stdout
+
+
+def test_sync_results_script_uses_unique_readable_bundle_dirs(tmp_path: Path) -> None:
+    script = PROJECT_ROOT / "scripts" / "sync_paper_eval_results.sh"
+    modal_root = tmp_path / "modal"
+    results_root = tmp_path / "paper_eval"
+    timestamp = "20260517_143000"
+    existing = results_root / f"qwen3_4b_3_4bit_paper_eval_{timestamp}"
+    existing.mkdir(parents=True)
+
+    result = subprocess.run(
+        [
+            str(script),
+            "qwen3_4b",
+            "both",
+            "--method",
+            "both",
+            "--output-dir",
+            str(modal_root),
+            "--results-dir",
+            str(results_root),
+            "--dry-run",
+        ],
+        cwd=PROJECT_ROOT,
+        check=True,
+        capture_output=True,
+        text=True,
+        env={**os.environ, "SKETCHAWQ_SYNC_TIMESTAMP": timestamp},
+    )
+
+    bundle = f"qwen3_4b_3_4bit_paper_eval_{timestamp}_02"
+    assert f"{modal_root}/{bundle}/runs/qwen3_4b_3bit_qwen_gptq_fair_balanced_packed_eval2048" in result.stdout
+    assert f"{results_root}/{bundle}/qwen3_4b_3_4bit_paper_eval_summary.csv" in result.stdout
+    assert "sketchawq.experiments.plot_search_choices" in result.stdout
+    assert "--name qwen3_4b_search_choices" in result.stdout
 
 
 def test_sync_results_script_dry_runs_qwen3_8b_c4_eval() -> None:
