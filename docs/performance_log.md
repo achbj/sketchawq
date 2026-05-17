@@ -45,3 +45,20 @@ The exact speedup still needs a Modal timing run. The target metric is:
 - Added observer tests for device-aware accumulator creation and final CPU materialization.
 - Ran observer and Hessian sketch tests locally.
 - Ran the full test suite locally: observer changes passed, with one existing Qwen3-4B paper-config expectation failure caused by the current search-grid edits.
+
+### First Qwen3-4B result
+
+Bundle: `artifacts/paper_eval/qwen3_4b_3_4bit_paper_eval_20260517_192225`
+
+Compared with the earlier balanced bundle `artifacts/paper_eval/OLD/qwen3_4b_3_4bit_paper_eval_20260517_163259`:
+
+| Bits | Run | Quant time | Stats time | PPL |
+| --- | --- | ---: | ---: | ---: |
+| 3 | old balanced | 231.48s | 208.62s | 17.7010 |
+| 3 | GPU accumulators + search-grid edit | 188.70s | 165.42s | 17.7015 |
+| 4 | old balanced | 208.41s | 184.37s | 15.8668 |
+| 4 | GPU accumulators + search-grid edit | 165.70s | 143.34s | 16.0346 |
+
+The accumulator change reduced stats time by about 20-22%, but it did not collapse the phase to the hoped-for range. The remaining stats cost is likely dominated by model forward passes, per-layer row sampling, and the sketch matrix products inside hooks.
+
+The 4-bit PPL regression is probably confounded by the search-grid edit. The earlier 4-bit search used exact `0.1` alpha and allowed higher clip ratios such as `0.9`/`0.93`; the latest grid narrowed alpha and clip candidates around lower values.
