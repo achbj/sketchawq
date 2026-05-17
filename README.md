@@ -40,6 +40,7 @@ sketchawq run-target paper-qwen2
 sketchawq run-target paper-qwen3-1-7b
 sketchawq run-target paper-qwen3-14b
 sketchawq run-target paper-qwen3-32b
+sketchawq run-target paper-mistral7b
 ```
 
 Run an external baseline config:
@@ -49,6 +50,7 @@ sketchawq baseline configs/baselines/qwen2_5_1_5b_gptq_4bit.yaml
 sketchawq run-target baseline-qwen3-1-7b
 sketchawq run-target baseline-qwen3-14b
 sketchawq run-target baseline-qwen3-32b
+sketchawq run-target baseline-mistral7b
 ```
 
 Use the per-model paper-eval scripts when you want a direct launcher. They run on
@@ -57,6 +59,7 @@ Modal by default and can switch to GPTQ or local dry-runs:
 ```bash
 scripts/paper_eval/qwen3_14b_3bit.sh
 scripts/paper_eval/qwen3_14b_3bit.sh --gptq
+scripts/paper_eval/mistral_7b_4bit.sh --method both --dry-run
 scripts/paper_eval/qwen3_32b_4bit.sh --method both --dry-run
 scripts/run_paper_eval.sh qwen2_5_1_5b 4 --method gptq --backend local
 ```
@@ -74,6 +77,7 @@ Choose a different Modal GPU with `--gpu` on the paper-eval launcher or by setti
 
 ```bash
 scripts/run_paper_eval.sh qwen3_8b 3 --method both --gpu L40S
+scripts/run_paper_eval.sh mistral_7b 4 --method both --gpu L40S
 scripts/run_paper_eval.sh qwen3_32b 4 --method both --gpu H100
 SKETCHAWQ_MODAL_GPU=A100 modal run infra/modal/sketchawq_app.py --config configs/paper/qwen3_14b_4bit.yaml
 ```

@@ -13,6 +13,7 @@ Models:
   qwen3_14b
   qwen3_32b
   llama_7b
+  mistral_7b
 
 Options:
   --method sketchawq|gptq|both  Which paper-eval row to run. Default: sketchawq
@@ -30,6 +31,7 @@ Examples:
   scripts/run_paper_eval.sh qwen3_8b 3 --method both --eval c4 --gpu L40S
   scripts/run_paper_eval.sh qwen3_1_7b 3 --method both --dry-run
   scripts/run_paper_eval.sh qwen3_8b 3 --method both --gpu L40S
+  scripts/run_paper_eval.sh mistral_7b 4 --method both --gpu L40S
   scripts/run_paper_eval.sh qwen3_32b 4 --method both --gpu H100
   scripts/run_paper_eval.sh qwen3_14b 3 --method both --dry-run
   scripts/paper_eval/qwen3_32b_4bit.sh --gptq
@@ -51,6 +53,7 @@ normalize_model() {
     qwen3_14b|qwen3_14) echo "qwen3_14b" ;;
     qwen3_32b|qwen3_32) echo "qwen3_32b" ;;
     llama|llama7b|llama_7b) echo "llama_7b" ;;
+    mistral|mistral7b|mistral_7b) echo "mistral_7b" ;;
     *) die "unknown model '$1'" ;;
   esac
 }
@@ -82,6 +85,8 @@ sketchawq_config() {
     wikitext:qwen3_32b:4) echo "configs/paper/qwen3_32b_4bit.yaml" ;;
     wikitext:llama_7b:3) echo "configs/paper/llama_7b_3bit.yaml" ;;
     wikitext:llama_7b:4) echo "configs/paper/llama_7b_4bit.yaml" ;;
+    wikitext:mistral_7b:3) echo "configs/paper/mistral_7b_3bit.yaml" ;;
+    wikitext:mistral_7b:4) echo "configs/paper/mistral_7b_4bit.yaml" ;;
     *) die "no SketchAWQ paper-eval config for $1 $2-bit with eval '$3'" ;;
   esac
 }
@@ -105,6 +110,8 @@ gptq_config() {
     wikitext:qwen3_32b:4) echo "configs/baselines/qwen3_32b_gptq_4bit.yaml" ;;
     wikitext:llama_7b:3) echo "configs/baselines/llama_7b_gptq_3bit.yaml" ;;
     wikitext:llama_7b:4) echo "configs/baselines/llama_7b_gptq_4bit.yaml" ;;
+    wikitext:mistral_7b:3) echo "configs/baselines/mistral_7b_gptq_3bit.yaml" ;;
+    wikitext:mistral_7b:4) echo "configs/baselines/mistral_7b_gptq_4bit.yaml" ;;
     *) die "no GPTQ paper-eval config for $1 $2-bit with eval '$3'" ;;
   esac
 }

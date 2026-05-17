@@ -15,6 +15,7 @@ Models:
   qwen3_14b
   qwen3_32b
   llama_7b
+  mistral_7b
 
 Options:
   --method sketchawq|gptq|both  Which result folders to sync. Default: both
@@ -33,6 +34,7 @@ Environment:
 Examples:
   scripts/sync_paper_eval_results.sh qwen3_8b both --method both --eval c4
   scripts/sync_paper_eval_results.sh qwen3_1_7b both --method both
+  scripts/sync_paper_eval_results.sh mistral_7b both --method both
   scripts/sync_paper_eval_results.sh qwen3_8b both --method both
   scripts/sync_paper_eval_results.sh qwen3_8b 3 --method both --dry-run
   MODAL_BIN=/Users/achbj/miniconda3/envs/modal/bin/modal scripts/sync_paper_eval_results.sh qwen3_8b both
@@ -53,6 +55,7 @@ normalize_model() {
     qwen3_14b|qwen3_14) echo "qwen3_14b" ;;
     qwen3_32b|qwen3_32) echo "qwen3_32b" ;;
     llama|llama7b|llama_7b) echo "llama_7b" ;;
+    mistral|mistral7b|mistral_7b) echo "mistral_7b" ;;
     *) die "unknown model '$1'" ;;
   esac
 }
@@ -103,6 +106,8 @@ sketchawq_config() {
     wikitext:qwen3_32b:4) echo "configs/paper/qwen3_32b_4bit.yaml" ;;
     wikitext:llama_7b:3) echo "configs/paper/llama_7b_3bit.yaml" ;;
     wikitext:llama_7b:4) echo "configs/paper/llama_7b_4bit.yaml" ;;
+    wikitext:mistral_7b:3) echo "configs/paper/mistral_7b_3bit.yaml" ;;
+    wikitext:mistral_7b:4) echo "configs/paper/mistral_7b_4bit.yaml" ;;
     *) die "no SketchAWQ paper-eval config for $1 $2-bit with eval '$3'" ;;
   esac
 }
@@ -126,6 +131,8 @@ gptq_config() {
     wikitext:qwen3_32b:4) echo "configs/baselines/qwen3_32b_gptq_4bit.yaml" ;;
     wikitext:llama_7b:3) echo "configs/baselines/llama_7b_gptq_3bit.yaml" ;;
     wikitext:llama_7b:4) echo "configs/baselines/llama_7b_gptq_4bit.yaml" ;;
+    wikitext:mistral_7b:3) echo "configs/baselines/mistral_7b_gptq_3bit.yaml" ;;
+    wikitext:mistral_7b:4) echo "configs/baselines/mistral_7b_gptq_4bit.yaml" ;;
     *) die "no GPTQ paper-eval config for $1 $2-bit with eval '$3'" ;;
   esac
 }

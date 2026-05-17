@@ -66,6 +66,14 @@ PAPER_EVAL_CONFIGS = {
         "configs/paper/llama_7b_4bit.yaml",
         "configs/baselines/llama_7b_gptq_4bit.yaml",
     ),
+    ("mistral_7b", 3): (
+        "configs/paper/mistral_7b_3bit.yaml",
+        "configs/baselines/mistral_7b_gptq_3bit.yaml",
+    ),
+    ("mistral_7b", 4): (
+        "configs/paper/mistral_7b_4bit.yaml",
+        "configs/baselines/mistral_7b_gptq_4bit.yaml",
+    ),
 }
 
 QWEN3_8B_C4_EVAL_CONFIGS = {
@@ -165,6 +173,30 @@ def test_qwen3_1_7b_check_configs_use_1024_by_256_budget() -> None:
         assert "_check_" in baseline.output.run_name
         assert sketchawq.output.run_name.endswith("eval1024")
         assert baseline.output.run_name.endswith("eval1024")
+
+
+def test_mistral_7b_configs_use_official_base_model_and_full_eval() -> None:
+    for bits, (sketchawq_config, gptq_config) in {
+        3: PAPER_EVAL_CONFIGS[("mistral_7b", 3)],
+        4: PAPER_EVAL_CONFIGS[("mistral_7b", 4)],
+    }.items():
+        sketchawq = load_config(PROJECT_ROOT / sketchawq_config)
+        baseline = load_baseline_config(PROJECT_ROOT / gptq_config)
+
+        assert sketchawq.model.repo_id == baseline.model.repo_id == "mistralai/Mistral-7B-v0.3"
+        assert sketchawq.model.dtype == baseline.model.dtype == "bfloat16"
+        assert sketchawq.quantization.bits == baseline.quantization.bits == bits
+        assert sketchawq.calibration.dataset_name == baseline.calibration.dataset_name == "allenai/c4"
+        assert sketchawq.calibration.num_samples == baseline.calibration.num_samples == 256
+        assert sketchawq.calibration.sequence_length == baseline.calibration.sequence_length == 2048
+        assert sketchawq.calibration.packing == baseline.calibration.packing is True
+        assert sketchawq.evaluation.benchmark_name == baseline.evaluation.benchmark_name
+        assert sketchawq.evaluation.benchmark_name == "wikitext2_validation_packed_eval2048"
+        assert sketchawq.evaluation.num_samples == baseline.evaluation.num_samples is None
+        assert sketchawq.evaluation.max_batches == baseline.evaluation.max_batches is None
+        assert sketchawq.evaluation.sequence_length == baseline.evaluation.sequence_length == 2048
+        assert sketchawq.evaluation.measure_throughput
+        assert baseline.evaluation.measure_throughput
 
 
 def test_every_model_bit_has_wrapper_script() -> None:
@@ -304,6 +336,42 @@ def test_sync_results_script_dry_runs_qwen3_1_7b_both_bits_and_methods() -> None
     assert "qwen3_1_7b_3_4bit_paper_eval_summary.csv" in result.stdout
 
 
+def test_run_script_dry_runs_mistral_7b_both_methods() -> None:
+    script = PROJECT_ROOT / "scripts" / "run_paper_eval.sh"
+
+    result = subprocess.run(
+        [str(script), "mistral_7b", "3", "--method", "both", "--dry-run"],
+        cwd=PROJECT_ROOT,
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+
+    assert "modal run infra/modal/sketchawq_app.py --config configs/paper/mistral_7b_3bit.yaml" in result.stdout
+    assert (
+        "modal run infra/modal/baseline_app.py --config configs/baselines/mistral_7b_gptq_3bit.yaml"
+        in result.stdout
+    )
+
+
+def test_sync_results_script_dry_runs_mistral_7b_both_bits_and_methods() -> None:
+    script = PROJECT_ROOT / "scripts" / "sync_paper_eval_results.sh"
+
+    result = subprocess.run(
+        [str(script), "mistral_7b", "both", "--method", "both", "--dry-run"],
+        cwd=PROJECT_ROOT,
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+
+    assert "modal volume get --force sketchawq-artifacts /mistral_7b_3bit_mistral_final_packed_eval2048" in result.stdout
+    assert "modal volume get --force sketchawq-artifacts /mistral_7b_gptq_3bit_eval2048" in result.stdout
+    assert "modal volume get --force sketchawq-artifacts /mistral_7b_4bit_mistral_final_packed_eval2048" in result.stdout
+    assert "modal volume get --force sketchawq-artifacts /mistral_7b_gptq_4bit_eval2048" in result.stdout
+    assert "mistral_7b_3_4bit_paper_eval_summary.csv" in result.stdout
+
+
 def test_sync_results_script_can_skip_plot_generation() -> None:
     script = PROJECT_ROOT / "scripts" / "sync_paper_eval_results.sh"
 
@@ -353,6 +421,6 @@ def test_qwen3_4b_paper_configs_use_focused_search_grids() -> None:
     four_bit = load_config(PROJECT_ROOT / "configs/paper/qwen3_4b_4bit.yaml")
 
     assert three_bit.quantization.awq_alpha_candidates == [0.0, 0.125, 0.25, 0.5]
-    assert three_bit.quantization.clip_candidates == [0.82, 0.8, 0.79]
+    assert three_bit.quantization.clip_candidates == [0.82, 0.8]
     assert four_bit.quantization.awq_alpha_candidates == [0.0, 0.1, 0.2, 0.3]
     assert four_bit.quantization.clip_candidates == [0.93, 0.9, 0.87, 0.85]

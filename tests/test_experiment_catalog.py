@@ -17,6 +17,7 @@ def test_catalog_loads_curated_targets() -> None:
 
     assert set(catalog) == {
         "baseline-llama7b",
+        "baseline-mistral7b",
         "baseline-qwen2",
         "baseline-qwen3-1-7b",
         "baseline-qwen3-4b",
@@ -24,6 +25,7 @@ def test_catalog_loads_curated_targets() -> None:
         "baseline-qwen3-14b",
         "baseline-qwen3-32b",
         "paper-llama7b",
+        "paper-mistral7b",
         "paper-qwen2",
         "paper-qwen3-1-7b",
         "paper-qwen3-14b",

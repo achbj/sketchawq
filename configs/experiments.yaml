@@ -61,6 +61,13 @@ targets:
       - configs/paper/llama_7b_3bit.yaml
       - configs/paper/llama_7b_4bit.yaml
 
+  paper-mistral7b:
+    description: Canonical Mistral 7B v0.3 SketchAWQ rows.
+    runner: sketchawq
+    configs:
+      - configs/paper/mistral_7b_3bit.yaml
+      - configs/paper/mistral_7b_4bit.yaml
+
   baseline-qwen2:
     description: Qwen2.5 1.5B GPTQ paper-eval rows.
     runner: baseline
@@ -109,3 +116,10 @@ targets:
     configs:
       - configs/baselines/llama_7b_gptq_3bit.yaml
       - configs/baselines/llama_7b_gptq_4bit.yaml
+
+  baseline-mistral7b:
+    description: Mistral 7B v0.3 GPTQ paper-eval rows.
+    runner: baseline
+    configs:
+      - configs/baselines/mistral_7b_gptq_3bit.yaml
+      - configs/baselines/mistral_7b_gptq_4bit.yaml
