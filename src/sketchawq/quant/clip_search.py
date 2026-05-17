@@ -5,7 +5,7 @@ from dataclasses import dataclass
 import torch
 
 from sketchawq.config import OutlierConfig, QuantizationConfig, SketchConfig
-from sketchawq.quant.awq_scale_search import _candidate_search_score
+from sketchawq.quant.awq_scale_search import _best_score, _candidate_search_score
 from sketchawq.quant.hessian_sketch import HessianSketch
 from sketchawq.quant.outliers import (
     OutlierSelection,
@@ -31,7 +31,8 @@ def search_clip_ratio(
     activation_rows: torch.Tensor | None = None,
 ) -> ClipSearchResult:
     outlier_config = outlier_config or OutlierConfig()
-    best: ClipSearchResult | None = None
+    candidates: list[float] = []
+    scores: list[torch.Tensor] = []
     for clip_ratio in quant_config.clip_candidates:
         candidate = fake_quantize_weight(
             weight,
@@ -56,8 +57,9 @@ def search_clip_ratio(
             sketch_config=sketch_config,
             activation_rows=activation_rows,
         )
-        result = ClipSearchResult(clip_ratio=float(clip_ratio), score=score)
-        if best is None or result.score < best.score:
-            best = result
-    assert best is not None
-    return best
+        candidates.append(float(clip_ratio))
+        scores.append(score)
+    if not candidates:
+        raise RuntimeError("No clip candidates were evaluated.")
+    best_index, best_score = _best_score(scores)
+    return ClipSearchResult(clip_ratio=candidates[best_index], score=best_score)

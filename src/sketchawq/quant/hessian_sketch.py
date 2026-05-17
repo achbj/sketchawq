@@ -15,6 +15,14 @@ class HessianSketch:
     rank: int
     mode: str
 
+    def to_cpu(self) -> "HessianSketch":
+        return HessianSketch(
+            diagonal=None if self.diagonal is None else self.diagonal.detach().cpu(),
+            basis=None if self.basis is None else self.basis.detach().cpu(),
+            rank=self.rank,
+            mode=self.mode,
+        )
+
 
 def build_hessian_sketch(stats: LayerStats, config: SketchConfig) -> HessianSketch:
     mode = config.effective_mode()

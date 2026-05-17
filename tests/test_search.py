@@ -6,7 +6,12 @@ from sketchawq.config import QuantizationConfig, SketchConfig
 from sketchawq.quant import awq_scale_search
 from sketchawq.quant.awq_scale_search import make_awq_scales, search_awq_scale_and_clip
 from sketchawq.quant.hessian_sketch import HessianSketch
-from sketchawq.quant.loss import output_error_score, weighted_error_score
+from sketchawq.quant.loss import (
+    output_error_score,
+    output_error_score_tensor,
+    weighted_error_score,
+    weighted_error_score_tensor,
+)
 
 
 def test_joint_scale_clip_search_checks_all_pairs(monkeypatch) -> None:
@@ -47,15 +52,15 @@ def test_joint_scale_clip_search_checks_all_pairs(monkeypatch) -> None:
         basis: torch.Tensor | None = None,
         low_rank_weight: float = 0.15,
         normalize_terms: bool = True,
-    ) -> float:
+    ) -> torch.Tensor:
         del original, diagonal, basis, low_rank_weight, normalize_terms
         alpha = float(candidate[0, 0])
         clip = float(candidate[0, 1])
-        return abs(alpha - 0.25) + abs(clip - 0.9)
+        return torch.tensor(abs(alpha - 0.25) + abs(clip - 0.9), device=candidate.device)
 
     monkeypatch.setattr(awq_scale_search, "make_awq_scales", fake_make_scales)
     monkeypatch.setattr(awq_scale_search, "fake_quantize_weight", fake_quantize_weight)
-    monkeypatch.setattr(awq_scale_search, "weighted_error_score", fake_score)
+    monkeypatch.setattr(awq_scale_search, "weighted_error_score_tensor", fake_score)
 
     result = search_awq_scale_and_clip(
         torch.ones(1, 2),
@@ -92,6 +97,19 @@ def test_weighted_error_score_normalizes_curvature_terms() -> None:
     torch.testing.assert_close(torch.tensor(scaled_score), torch.tensor(score))
 
 
+def test_weighted_error_score_tensor_stays_on_input_device() -> None:
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    original = torch.tensor([[1.0, 2.0, 3.0], [1.5, -2.0, 0.5]], device=device)
+    candidate = original * 0.9
+    diagonal = torch.tensor([0.5, 1.0, 2.0], device=device)
+
+    score = weighted_error_score_tensor(original, candidate, diagonal=diagonal)
+
+    assert score.ndim == 0
+    assert score.device.type == device.type
+    assert float(score.detach().cpu()) > 0.0
+
+
 def test_output_error_score_measures_calibration_output_reconstruction() -> None:
     original = torch.tensor([[1.0, 0.0], [0.0, 2.0]])
     candidate = torch.tensor([[0.5, 0.0], [0.0, 2.0]])
@@ -102,6 +120,19 @@ def test_output_error_score_measures_calibration_output_reconstruction() -> None
 
     assert score > 0.0
     torch.testing.assert_close(torch.tensor(scaled_score), torch.tensor(score))
+
+
+def test_output_error_score_tensor_stays_on_input_device() -> None:
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    original = torch.tensor([[1.0, 0.0], [0.0, 2.0]], device=device)
+    candidate = torch.tensor([[0.5, 0.0], [0.0, 2.0]], device=device)
+    activation_rows = torch.tensor([[2.0, 0.0], [0.0, 1.0]], device=device)
+
+    score = output_error_score_tensor(original, candidate, activation_rows)
+
+    assert score.ndim == 0
+    assert score.device.type == device.type
+    assert float(score.detach().cpu()) > 0.0
 
 
 def test_output_aware_search_uses_activation_rows(monkeypatch) -> None:
@@ -131,13 +162,13 @@ def test_output_aware_search_uses_activation_rows(monkeypatch) -> None:
         alpha = float(input_scale[0])
         return torch.tensor([[alpha, 0.0]], dtype=torch.float32)
 
-    def misleading_weight_score(*args, **kwargs) -> float:
+    def misleading_weight_score(*args, **kwargs) -> torch.Tensor:
         del args, kwargs
-        return 0.0
+        return torch.tensor(0.0)
 
     monkeypatch.setattr(awq_scale_search, "make_awq_scales", fake_make_scales)
     monkeypatch.setattr(awq_scale_search, "fake_quantize_weight", fake_quantize_weight)
-    monkeypatch.setattr(awq_scale_search, "weighted_error_score", misleading_weight_score)
+    monkeypatch.setattr(awq_scale_search, "weighted_error_score_tensor", misleading_weight_score)
 
     config = QuantizationConfig(
         awq_alpha_candidates=[0.0, 1.0],

@@ -91,6 +91,32 @@ def test_collect_layer_stats_returns_cpu_stats_after_gpu_accumulation() -> None:
     assert stats.activation_sample.device.type == "cpu"
 
 
+def test_collect_layer_stats_can_keep_accumulators_on_model_device() -> None:
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    model = MaskedToyModel().to(device)
+    batch = CalibrationBatch(
+        input_ids=torch.tensor([[[1.0, 2.0], [3.0, 4.0]]], device=device),
+        attention_mask=torch.tensor([[1, 1]], device=device),
+    )
+
+    stats = collect_layer_stats(
+        model,
+        [batch],
+        sketch_rank=2,
+        max_rows_per_batch=2,
+        seed=0,
+        activation_sample_rows=2,
+        finalize_to_cpu=False,
+    )["proj"]
+
+    assert stats.abs_sum.device.type == device.type
+    assert stats.sq_sum.device.type == device.type
+    assert stats.sketch_sum is not None
+    assert stats.sketch_sum.device.type == device.type
+    assert stats.activation_sample is not None
+    assert stats.activation_sample.device.type == device.type
+
+
 def test_observer_retains_activation_rows_for_output_error() -> None:
     model = MaskedToyModel()
     batch = CalibrationBatch(
