@@ -13,7 +13,7 @@ from sketchawq.models.layers import iter_named_linears
 from sketchawq.quant.adaptive import LayerAdaptiveInput, build_layer_adaptive_plans
 from sketchawq.quant.awq_scale_search import search_awq_scale_and_clip
 from sketchawq.quant.hessian_sketch import build_hessian_sketch
-from sketchawq.quant.observer import LayerStats, collect_layer_stats
+from sketchawq.quant.observer import LayerStats, collect_layer_stats_with_summary
 from sketchawq.quant.outliers import (
     apply_outlier_policy_to_candidate,
     select_outlier_channels,
@@ -105,7 +105,7 @@ class QuantizationSummary:
     cuda_peak_memory_mb: float | None
     stats_accumulator_device: str | None
     stats_accumulator_dtype: str | None
-    timings: dict[str, float]
+    timings: dict[str, float | int | bool]
     layers: list[LayerQuantizationSummary]
     packed_layers: list[PackedLayerArtifact]
     artifact_format: str = "sketchawq-packed-v1"
@@ -130,13 +130,13 @@ def quantize_model(
     config: SketchAWQConfig,
 ) -> QuantizationSummary:
     start = time.perf_counter()
-    timings: dict[str, float] = {}
+    timings: dict[str, float | int | bool] = {}
     if torch.cuda.is_available():
         torch.cuda.reset_peak_memory_stats()
     sketch_rank = config.sketch.effective_rank()
     LOGGER.info("Collecting activation statistics and Hessian sketch inputs")
     phase_start = time.perf_counter()
-    stats_by_name = collect_layer_stats(
+    stats_result = collect_layer_stats_with_summary(
         model,
         calibration_batches,
         sketch_rank=sketch_rank,
@@ -146,10 +146,12 @@ def quantize_model(
         mask_mismatch_action=config.sketch.mask_mismatch_action,
         activation_sample_rows=config.quantization.output_error_rows,
     )
+    stats_by_name = stats_result.stats
     stats_accumulator_device, stats_accumulator_dtype = _summarize_stats_accumulators(
         stats_by_name
     )
     timings["collect_stats_seconds"] = time.perf_counter() - phase_start
+    timings.update(stats_result.timings)
 
     summaries: list[LayerQuantizationSummary] = []
     packed_layers: list[PackedLayerArtifact] = []

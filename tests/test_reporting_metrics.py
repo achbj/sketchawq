@@ -24,6 +24,13 @@ def test_run_summary_includes_global_storage_estimates() -> None:
             "stats_accumulator_dtype": "float32",
             "timings": {
                 "collect_stats_seconds": 0.4,
+                "stats_batches": 2,
+                "stats_tokens": 4096,
+                "stats_forward_seconds": 0.35,
+                "stats_tokens_per_second": 11702.857142857143,
+                "stats_use_cache_disabled": True,
+                "stats_attention_mask_fast_path_batches": 2,
+                "stats_masked_batches": 0,
                 "prepare_sketches_seconds": 0.1,
                 "layer_quantization_seconds": 0.3,
                 "layer_elapsed_sum_seconds": 0.25,
@@ -50,6 +57,11 @@ def test_run_summary_includes_global_storage_estimates() -> None:
     assert row["evaluation_samples"] == config.evaluation.num_samples
     assert row["evaluation_sequence_length"] == config.evaluation.sequence_length
     assert row["collect_stats_seconds"] == 0.4
+    assert row["stats_batches"] == 2
+    assert row["stats_tokens"] == 4096
+    assert row["stats_forward_seconds"] == 0.35
+    assert row["stats_use_cache_disabled"] is True
+    assert row["stats_attention_mask_fast_path_batches"] == 2
     assert row["layer_quantization_seconds"] == 0.3
     assert row["stats_accumulator_device"] == "cuda"
     assert row["stats_accumulator_dtype"] == "float32"

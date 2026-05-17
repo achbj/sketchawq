@@ -83,3 +83,38 @@ The experiment did not improve runtime. Recent Qwen3-4B bundles showed layer tim
 ### Decision
 
 Reverted the tensor-score search path and the pipeline GPU-cache management experiment. Keep the earlier GPU-resident calibration accumulator change, because that had a measurable stats-time improvement. Next speed work should target calibration batching rather than layer-search score synchronization.
+
+## 2026-05-17 - Stats-phase timing and low-risk calibration forward cleanup
+
+### Context
+
+The latest Qwen3-4B 4-bit runs still spend almost all quantization time in stats collection:
+
+- `20260517_203358`: 187.14s total, 165.02s stats, 21.55s layer quantization
+- `20260517_220520`: 188.67s total, 165.87s stats, 22.22s layer quantization
+
+That means the next speed work should measure and reduce the calibration forward/stat path rather than the AWQ search loop.
+
+### Change
+
+The stats collector now reports additional timing/context fields into the quantization report and `run_summary.csv`:
+
+- `stats_batches`
+- `stats_tokens`
+- `stats_forward_seconds`
+- `stats_tokens_per_second`
+- `stats_use_cache_disabled`
+- `stats_attention_mask_fast_path_batches`
+- `stats_masked_batches`
+
+Calibration stats collection now uses `torch.inference_mode()`, passes `use_cache=False` when the model forward signature supports it, and skips per-layer attention-mask filtering when the calibration batch mask is all ones. Packed C4 calibration should hit the all-ones fast path for every batch.
+
+### Expected impact
+
+This is intentionally low-risk. It may shave some overhead, but its main job is to make the next Modal run diagnosable. If `stats_forward_seconds` is nearly the same as `collect_stats_seconds`, the bottleneck is the model forward plus hooks. If the gap is large, CPU-side finalization or artifact/reporting work is suspect.
+
+### Verification
+
+- Focused stats/pipeline/reporting tests passed.
+- Nearby observer, pipeline, reporting, model-save, Hessian sketch, and search tests passed.
+- Full suite passed except the existing Qwen3-4B paper-config candidate-grid expectation mismatch.

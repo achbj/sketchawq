@@ -1,6 +1,9 @@
 from __future__ import annotations
 
+import inspect
 import logging
+import time
+from collections.abc import Mapping
 from dataclasses import dataclass
 from typing import Any
 
@@ -84,6 +87,12 @@ class LayerStats:
             self.sketch_sum = self.sketch_sum.detach().cpu()
         if self.activation_sample is not None:
             self.activation_sample = self.activation_sample.detach().cpu()
+
+
+@dataclass(frozen=True, slots=True)
+class StatsCollectionResult:
+    stats: dict[str, LayerStats]
+    timings: dict[str, float | int | bool]
 
 
 class ActivationObserver:
@@ -307,6 +316,29 @@ def collect_layer_stats(
     mask_mismatch_action: str = "warn",
     activation_sample_rows: int = 0,
 ) -> dict[str, LayerStats]:
+    return collect_layer_stats_with_summary(
+        model,
+        calibration_batches,
+        sketch_rank=sketch_rank,
+        max_rows_per_batch=max_rows_per_batch,
+        seed=seed,
+        row_sampling=row_sampling,
+        mask_mismatch_action=mask_mismatch_action,
+        activation_sample_rows=activation_sample_rows,
+    ).stats
+
+
+def collect_layer_stats_with_summary(
+    model: torch.nn.Module,
+    calibration_batches,
+    *,
+    sketch_rank: int,
+    max_rows_per_batch: int,
+    seed: int,
+    row_sampling: str = "random",
+    mask_mismatch_action: str = "warn",
+    activation_sample_rows: int = 0,
+) -> StatsCollectionResult:
     observer = ActivationObserver(
         sketch_rank=sketch_rank,
         max_rows_per_batch=max_rows_per_batch,
@@ -315,19 +347,106 @@ def collect_layer_stats(
         mask_mismatch_action=mask_mismatch_action,
         activation_sample_rows=activation_sample_rows,
     )
+    batches = 0
+    tokens = 0
+    all_ones_mask_batches = 0
+    masked_batches = 0
+    use_cache_disabled = _model_accepts_use_cache(model)
     observer.attach(model)
     try:
         model.eval()
-        with torch.no_grad():
+        _synchronize_model_device(model)
+        forward_start = time.perf_counter()
+        with torch.inference_mode():
             for batch in calibration_batches:
-                kwargs = batch.as_model_kwargs() if hasattr(batch, "as_model_kwargs") else batch
-                observer.set_attention_mask(kwargs.get("attention_mask"))
+                kwargs = _as_model_kwargs(batch)
+                attention_mask = kwargs.get("attention_mask")
+                all_ones_mask, mask_tokens = _attention_mask_status(attention_mask)
+                tokens += mask_tokens if mask_tokens is not None else _input_token_count(kwargs)
+                if all_ones_mask:
+                    all_ones_mask_batches += 1
+                    observer.set_attention_mask(None)
+                else:
+                    if attention_mask is not None:
+                        masked_batches += 1
+                    observer.set_attention_mask(attention_mask)
+                if use_cache_disabled:
+                    kwargs["use_cache"] = False
                 try:
                     model(**kwargs)
                 finally:
                     observer.set_attention_mask(None)
+                batches += 1
+        _synchronize_model_device(model)
+        forward_seconds = time.perf_counter() - forward_start
     finally:
         observer.remove()
     for stats in observer.stats.values():
         stats.move_to_cpu()
-    return observer.stats
+    return StatsCollectionResult(
+        stats=observer.stats,
+        timings={
+            "stats_batches": batches,
+            "stats_tokens": tokens,
+            "stats_forward_seconds": forward_seconds,
+            "stats_tokens_per_second": _safe_rate(tokens, forward_seconds),
+            "stats_use_cache_disabled": use_cache_disabled,
+            "stats_attention_mask_fast_path_batches": all_ones_mask_batches,
+            "stats_masked_batches": masked_batches,
+        },
+    )
+
+
+def _as_model_kwargs(batch: Any) -> dict[str, Any]:
+    if hasattr(batch, "as_model_kwargs"):
+        return dict(batch.as_model_kwargs())
+    if isinstance(batch, Mapping):
+        return dict(batch)
+    return dict(batch)
+
+
+def _model_accepts_use_cache(model: torch.nn.Module) -> bool:
+    try:
+        signature = inspect.signature(model.forward)
+    except (TypeError, ValueError):
+        return False
+    for parameter in signature.parameters.values():
+        if parameter.name == "use_cache" or parameter.kind is inspect.Parameter.VAR_KEYWORD:
+            return True
+    return False
+
+
+def _attention_mask_status(mask: Any) -> tuple[bool, int | None]:
+    if mask is None or not isinstance(mask, torch.Tensor):
+        return False, None
+    if mask.numel() == 0:
+        return False, 0
+    token_count = int(mask.detach().sum().item())
+    return token_count == mask.numel(), token_count
+
+
+def _input_token_count(kwargs: dict[str, Any]) -> int:
+    input_ids = kwargs.get("input_ids")
+    if isinstance(input_ids, torch.Tensor):
+        return int(input_ids.numel())
+    return 0
+
+
+def _safe_rate(count: int, seconds: float) -> float:
+    if seconds <= 0:
+        return 0.0
+    return float(count) / float(seconds)
+
+
+def _synchronize_model_device(model: torch.nn.Module) -> None:
+    device = _first_model_device(model)
+    if device is not None and device.type == "cuda":
+        torch.cuda.synchronize(device)
+
+
+def _first_model_device(model: torch.nn.Module) -> torch.device | None:
+    for parameter in model.parameters(recurse=True):
+        return parameter.device
+    for buffer in model.buffers(recurse=True):
+        return buffer.device
+    return None

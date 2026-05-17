@@ -60,6 +60,15 @@ def _summary_from_report(path: Path) -> dict:
             "num_layers": quant.get("num_layers"),
             "quantization_seconds": quant.get("elapsed_seconds"),
             "collect_stats_seconds": timings.get("collect_stats_seconds"),
+            "stats_batches": timings.get("stats_batches"),
+            "stats_tokens": timings.get("stats_tokens"),
+            "stats_forward_seconds": timings.get("stats_forward_seconds"),
+            "stats_tokens_per_second": timings.get("stats_tokens_per_second"),
+            "stats_use_cache_disabled": timings.get("stats_use_cache_disabled"),
+            "stats_attention_mask_fast_path_batches": timings.get(
+                "stats_attention_mask_fast_path_batches"
+            ),
+            "stats_masked_batches": timings.get("stats_masked_batches"),
             "prepare_sketches_seconds": timings.get("prepare_sketches_seconds"),
             "layer_quantization_seconds": timings.get("layer_quantization_seconds"),
             "layer_elapsed_sum_seconds": timings.get("layer_elapsed_sum_seconds"),

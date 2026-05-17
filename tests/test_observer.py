@@ -11,6 +11,7 @@ from sketchawq.quant.observer import (
     _sample_rows,
     _select_unmasked_rows,
     collect_layer_stats,
+    collect_layer_stats_with_summary,
 )
 
 
@@ -21,6 +22,24 @@ class MaskedToyModel(torch.nn.Module):
 
     def forward(self, input_ids: torch.Tensor, attention_mask: torch.Tensor) -> torch.Tensor:
         del attention_mask
+        return self.proj(input_ids.float())
+
+
+class CacheAwareToyModel(torch.nn.Module):
+    def __init__(self) -> None:
+        super().__init__()
+        self.proj = torch.nn.Linear(2, 2, bias=False)
+        self.use_cache_values: list[bool] = []
+
+    def forward(
+        self,
+        input_ids: torch.Tensor,
+        attention_mask: torch.Tensor,
+        *,
+        use_cache: bool = True,
+    ) -> torch.Tensor:
+        del attention_mask
+        self.use_cache_values.append(use_cache)
         return self.proj(input_ids.float())
 
 
@@ -93,6 +112,32 @@ def test_collect_layer_stats_returns_cpu_stats_after_gpu_accumulation() -> None:
     assert stats.sketch_sum.device.type == "cpu"
     assert stats.activation_sample is not None
     assert stats.activation_sample.device.type == "cpu"
+
+
+def test_collect_layer_stats_summary_records_forward_shape_and_cache_mode() -> None:
+    model = CacheAwareToyModel()
+    batch = CalibrationBatch(
+        input_ids=torch.tensor([[[1.0, 2.0], [3.0, 4.0], [5.0, 6.0], [7.0, 8.0]]]),
+        attention_mask=torch.ones(1, 4, dtype=torch.long),
+    )
+
+    result = collect_layer_stats_with_summary(
+        model,
+        [batch],
+        sketch_rank=0,
+        max_rows_per_batch=8,
+        seed=0,
+    )
+
+    assert result.stats["proj"].count == 4
+    assert model.use_cache_values == [False]
+    assert result.timings["stats_batches"] == 1
+    assert result.timings["stats_tokens"] == 4
+    assert result.timings["stats_forward_seconds"] >= 0
+    assert result.timings["stats_tokens_per_second"] > 0
+    assert result.timings["stats_use_cache_disabled"] is True
+    assert result.timings["stats_attention_mask_fast_path_batches"] == 1
+    assert result.timings["stats_masked_batches"] == 0
 
 
 def test_observer_retains_activation_rows_for_output_error() -> None:

@@ -33,6 +33,12 @@ def test_pipeline_runs_on_tiny_random_gpt2() -> None:
     assert report.num_layers > 0
     assert report.method == "SketchAWQ-diagonal-low-rank-v0"
     assert report.timings["collect_stats_seconds"] >= 0
+    assert report.timings["stats_batches"] == 1
+    assert report.timings["stats_tokens"] == 16
+    assert report.timings["stats_forward_seconds"] >= 0
+    assert report.timings["stats_tokens_per_second"] > 0
+    assert report.timings["stats_use_cache_disabled"] is True
+    assert report.timings["stats_attention_mask_fast_path_batches"] == 1
     assert report.timings["prepare_sketches_seconds"] >= 0
     assert report.timings["layer_quantization_seconds"] >= 0
     assert report.timings["total_seconds"] == pytest.approx(report.elapsed_seconds)
