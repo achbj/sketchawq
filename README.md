@@ -38,6 +38,7 @@ Run a named target from the catalog:
 sketchawq run-target smoke
 sketchawq run-target paper-qwen2
 sketchawq run-target paper-qwen3-1-7b
+sketchawq run-target paper-qwen3-4b-best
 sketchawq run-target paper-qwen3-14b
 sketchawq run-target paper-qwen3-32b
 sketchawq run-target paper-mistral7b

@@ -6,7 +6,7 @@ model:
 
 quantization:
   bits: 4
-  group_size: 64
+  group_size: 128
   symmetric: true
   scale_clip_search: greedy
   awq_alpha_candidates: [0.0, 0.1, 0.2, 0.3]
@@ -56,7 +56,7 @@ evaluation:
   measure_throughput: true
 
 output:
-  run_name: qwen3_4b_4bit_qwen_final_packed_eval2048
+  run_name: qwen3_4b_4bit_qwen_gptq_fair_packed_eval2048
   output_dir: artifacts
   save_model: false
 

@@ -11,7 +11,7 @@ model:
 
 quantization:
   bits: 4
-  group_size: 64
+  group_size: 128
   symmetric: true
 
 calibration:
@@ -42,7 +42,7 @@ evaluation:
   measure_throughput: true
 
 output:
-  run_name: qwen3_4b_gptq_4bit_eval2048
+  run_name: qwen3_4b_gptq_4bit_g128_eval2048
   output_dir: artifacts
   save_model: false
 

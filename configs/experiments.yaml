@@ -20,11 +20,18 @@ targets:
       - configs/paper/qwen2_5_1_5b_4bit.yaml
 
   paper-qwen3-4b:
-    description: Canonical Qwen3 4B SketchAWQ rows.
+    description: Qwen3 4B SketchAWQ rows matched to the GPTQ comparison shape.
     runner: sketchawq
     configs:
       - configs/paper/qwen3_4b_3bit.yaml
       - configs/paper/qwen3_4b_4bit.yaml
+
+  paper-qwen3-4b-best:
+    description: Accuracy-oriented Qwen3 4B SketchAWQ rows with smaller groups.
+    runner: sketchawq
+    configs:
+      - configs/paper/qwen3_4b_3bit_best.yaml
+      - configs/paper/qwen3_4b_4bit_best.yaml
 
   paper-qwen3-1-7b:
     description: Canonical Qwen3 1.7B SketchAWQ rows.

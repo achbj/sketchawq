@@ -421,11 +421,52 @@ def test_qwen3_8b_paper_configs_match_gptq_fair_comparison_shape() -> None:
     assert four_bit.quantization.clip_candidates == [0.93, 0.9, 0.87, 0.85]
 
 
-def test_qwen3_4b_paper_configs_use_focused_search_grids() -> None:
+def test_qwen3_4b_paper_configs_match_gptq_fair_comparison_shape() -> None:
     three_bit = load_config(PROJECT_ROOT / "configs/paper/qwen3_4b_3bit.yaml")
     four_bit = load_config(PROJECT_ROOT / "configs/paper/qwen3_4b_4bit.yaml")
+    three_bit_baseline = load_baseline_config(
+        PROJECT_ROOT / "configs/baselines/qwen3_4b_gptq_3bit.yaml"
+    )
+    four_bit_baseline = load_baseline_config(
+        PROJECT_ROOT / "configs/baselines/qwen3_4b_gptq_4bit.yaml"
+    )
 
+    assert three_bit.quantization.group_size == three_bit_baseline.quantization.group_size == 128
+    assert three_bit.quantization.search_objective == "weighted_error"
+    assert three_bit.quantization.output_error_rows == 0
     assert three_bit.quantization.awq_alpha_candidates == [0.0, 0.125, 0.25, 0.5]
     assert three_bit.quantization.clip_candidates == [0.82, 0.8]
+    assert four_bit.quantization.group_size == four_bit_baseline.quantization.group_size == 128
+    assert four_bit.quantization.search_objective == "weighted_error"
     assert four_bit.quantization.awq_alpha_candidates == [0.0, 0.1, 0.2, 0.3]
     assert four_bit.quantization.clip_candidates == [0.93, 0.9, 0.87, 0.85]
+
+
+def test_qwen3_4b_best_configs_keep_accuracy_oriented_shape() -> None:
+    three_bit = load_config(PROJECT_ROOT / "configs/paper/qwen3_4b_3bit_best.yaml")
+    four_bit = load_config(PROJECT_ROOT / "configs/paper/qwen3_4b_4bit_best.yaml")
+
+    assert three_bit.quantization.group_size == 64
+    assert three_bit.quantization.search_objective == "hybrid"
+    assert three_bit.quantization.output_error_rows == 64
+    assert three_bit.output.run_name == "qwen3_4b_3bit_qwen_best_packed_eval2048"
+    assert four_bit.quantization.group_size == 64
+    assert four_bit.quantization.search_objective == "weighted_error"
+    assert four_bit.output.run_name == "qwen3_4b_4bit_qwen_best_packed_eval2048"
+
+
+def test_sync_results_script_dry_runs_qwen3_4b_fair_configs() -> None:
+    script = PROJECT_ROOT / "scripts" / "sync_paper_eval_results.sh"
+
+    result = subprocess.run(
+        [str(script), "qwen3_4b", "both", "--method", "both", "--dry-run", "--no-plots"],
+        cwd=PROJECT_ROOT,
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+
+    assert "modal volume get --force sketchawq-artifacts /qwen3_4b_3bit_qwen_gptq_fair_packed_eval2048" in result.stdout
+    assert "modal volume get --force sketchawq-artifacts /qwen3_4b_gptq_3bit_g128_eval2048" in result.stdout
+    assert "modal volume get --force sketchawq-artifacts /qwen3_4b_4bit_qwen_gptq_fair_packed_eval2048" in result.stdout
+    assert "modal volume get --force sketchawq-artifacts /qwen3_4b_gptq_4bit_g128_eval2048" in result.stdout

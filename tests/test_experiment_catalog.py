@@ -31,6 +31,7 @@ def test_catalog_loads_curated_targets() -> None:
         "paper-qwen3-14b",
         "paper-qwen3-32b",
         "paper-qwen3-4b",
+        "paper-qwen3-4b-best",
         "paper-qwen3-8b",
         "smoke",
         "smoke-qwen",
