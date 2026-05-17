@@ -16,8 +16,8 @@ quantization:
   awq_scale_normalization: geometric_mean
   awq_min_scale: 0.125
   awq_max_scale: 8.0
-  awq_alpha_candidates: [0.0, 0.1, 0.2, 0.3, 0.4]
-  clip_candidates: [1.0, 0.95, 0.93, 0.9, 0.87, 0.85]
+  awq_alpha_candidates: [0.0, 0.0875, 0.125, 0.175, 0.2, 0.25]
+  clip_candidates: [0.88, 0.87, 0.86, 0.85]
 
 outliers:
   enabled: true
