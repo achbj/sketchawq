@@ -20,6 +20,8 @@ def test_run_summary_includes_global_storage_estimates() -> None:
             "method": "SketchAWQ-v0",
             "num_layers": 2,
             "elapsed_seconds": 1.0,
+            "stats_accumulator_device": "cuda",
+            "stats_accumulator_dtype": "float32",
             "timings": {
                 "collect_stats_seconds": 0.4,
                 "prepare_sketches_seconds": 0.1,
@@ -49,6 +51,8 @@ def test_run_summary_includes_global_storage_estimates() -> None:
     assert row["evaluation_sequence_length"] == config.evaluation.sequence_length
     assert row["collect_stats_seconds"] == 0.4
     assert row["layer_quantization_seconds"] == 0.3
+    assert row["stats_accumulator_device"] == "cuda"
+    assert row["stats_accumulator_dtype"] == "float32"
     assert row["awq_min_scale"] == config.quantization.awq_min_scale
     assert row["awq_max_scale"] == config.quantization.awq_max_scale
 

@@ -51,6 +51,8 @@ def test_layer_stats_accumulators_use_requested_device_and_float32() -> None:
 
     assert stats.abs_sum.device.type == device.type
     assert stats.sq_sum.device.type == device.type
+    assert stats.accumulator_device == device.type
+    assert stats.accumulator_dtype == "float32"
     assert stats.abs_sum.dtype == torch.float32
     assert stats.sq_sum.dtype == torch.float32
     assert stats.sketch_omega is not None
@@ -83,6 +85,8 @@ def test_collect_layer_stats_returns_cpu_stats_after_gpu_accumulation() -> None:
 
     assert stats.abs_sum.device.type == "cpu"
     assert stats.sq_sum.device.type == "cpu"
+    assert stats.accumulator_device == device.type
+    assert stats.accumulator_dtype == "float32"
     assert stats.sketch_omega is not None
     assert stats.sketch_sum is not None
     assert stats.sketch_omega.device.type == "cpu"

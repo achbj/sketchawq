@@ -36,6 +36,10 @@ def test_pipeline_runs_on_tiny_random_gpt2() -> None:
     assert report.timings["prepare_sketches_seconds"] >= 0
     assert report.timings["layer_quantization_seconds"] >= 0
     assert report.timings["total_seconds"] == pytest.approx(report.elapsed_seconds)
+    assert report.stats_accumulator_device == "cpu"
+    assert report.stats_accumulator_dtype == "float32"
+    assert report.to_dict()["stats_accumulator_device"] == "cpu"
+    assert report.to_dict()["stats_accumulator_dtype"] == "float32"
     assert report.packed_layers
     assert all(layer.packed_weight.dtype == torch.uint8 for layer in report.packed_layers)
     assert {layer.name for layer in report.packed_layers} == {layer.name for layer in report.layers}

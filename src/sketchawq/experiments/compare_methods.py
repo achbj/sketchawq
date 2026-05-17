@@ -64,6 +64,8 @@ def _summary_from_report(path: Path) -> dict:
             "layer_quantization_seconds": timings.get("layer_quantization_seconds"),
             "layer_elapsed_sum_seconds": timings.get("layer_elapsed_sum_seconds"),
             "other_quantization_seconds": timings.get("other_quantization_seconds"),
+            "stats_accumulator_device": quant.get("stats_accumulator_device"),
+            "stats_accumulator_dtype": quant.get("stats_accumulator_dtype"),
             "cuda_peak_memory_mb": quant.get("cuda_peak_memory_mb"),
             "loss": ppl.get("loss"),
             "perplexity": ppl.get("perplexity"),

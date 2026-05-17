@@ -22,6 +22,8 @@ class LayerStats:
     sketch_sum: torch.Tensor | None = None
     sketch_count: int = 0
     activation_sample: torch.Tensor | None = None
+    accumulator_device: str = "cpu"
+    accumulator_dtype: str = "float32"
 
     @classmethod
     def create(
@@ -55,6 +57,8 @@ class LayerStats:
             sq_sum=torch.zeros(in_features, dtype=torch.float32, device=accumulator_device),
             sketch_omega=omega,
             sketch_sum=sketch_sum,
+            accumulator_device=accumulator_device.type,
+            accumulator_dtype=_dtype_label(torch.float32),
         )
 
     @property
@@ -258,6 +262,10 @@ def _generator_device(device: torch.device) -> str:
     if device.type == "cuda":
         return f"cuda:{device.index}" if device.index is not None else "cuda"
     return "cpu"
+
+
+def _dtype_label(dtype: torch.dtype) -> str:
+    return str(dtype).removeprefix("torch.")
 
 
 def _normalize_row_sampling(method: str) -> str:

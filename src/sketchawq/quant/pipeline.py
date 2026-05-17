@@ -13,7 +13,7 @@ from sketchawq.models.layers import iter_named_linears
 from sketchawq.quant.adaptive import LayerAdaptiveInput, build_layer_adaptive_plans
 from sketchawq.quant.awq_scale_search import search_awq_scale_and_clip
 from sketchawq.quant.hessian_sketch import build_hessian_sketch
-from sketchawq.quant.observer import collect_layer_stats
+from sketchawq.quant.observer import LayerStats, collect_layer_stats
 from sketchawq.quant.outliers import (
     apply_outlier_policy_to_candidate,
     select_outlier_channels,
@@ -103,6 +103,8 @@ class QuantizationSummary:
     num_layers: int
     elapsed_seconds: float
     cuda_peak_memory_mb: float | None
+    stats_accumulator_device: str | None
+    stats_accumulator_dtype: str | None
     timings: dict[str, float]
     layers: list[LayerQuantizationSummary]
     packed_layers: list[PackedLayerArtifact]
@@ -115,6 +117,8 @@ class QuantizationSummary:
             "num_layers": self.num_layers,
             "elapsed_seconds": self.elapsed_seconds,
             "cuda_peak_memory_mb": self.cuda_peak_memory_mb,
+            "stats_accumulator_device": self.stats_accumulator_device,
+            "stats_accumulator_dtype": self.stats_accumulator_dtype,
             "timings": self.timings,
             "layers": [asdict(layer) for layer in self.layers],
         }
@@ -141,6 +145,9 @@ def quantize_model(
         row_sampling=config.sketch.row_sampling,
         mask_mismatch_action=config.sketch.mask_mismatch_action,
         activation_sample_rows=config.quantization.output_error_rows,
+    )
+    stats_accumulator_device, stats_accumulator_dtype = _summarize_stats_accumulators(
+        stats_by_name
     )
     timings["collect_stats_seconds"] = time.perf_counter() - phase_start
 
@@ -342,6 +349,8 @@ def quantize_model(
         num_layers=len(summaries),
         elapsed_seconds=elapsed,
         cuda_peak_memory_mb=cuda_peak_memory_mb,
+        stats_accumulator_device=stats_accumulator_device,
+        stats_accumulator_dtype=stats_accumulator_dtype,
         timings=timings,
         layers=summaries,
         packed_layers=packed_layers,
@@ -369,6 +378,32 @@ def _estimate_quantized_storage(
     fp16_mb = weight_values * 2 / 1_000_000
     ratio = fp16_mb / max(total_mb, 1e-12)
     return total_mb, ratio
+
+
+def _summarize_stats_accumulators(
+    stats_by_name: dict[str, LayerStats],
+) -> tuple[str | None, str | None]:
+    devices = sorted(
+        {
+            stats.accumulator_device
+            for stats in stats_by_name.values()
+            if getattr(stats, "accumulator_device", None)
+        }
+    )
+    dtypes = sorted(
+        {
+            stats.accumulator_dtype
+            for stats in stats_by_name.values()
+            if getattr(stats, "accumulator_dtype", None)
+        }
+    )
+    return _join_unique(devices), _join_unique(dtypes)
+
+
+def _join_unique(values: list[str]) -> str | None:
+    if not values:
+        return None
+    return ";".join(values)
 
 
 def _method_label(config: SketchAWQConfig) -> str:
