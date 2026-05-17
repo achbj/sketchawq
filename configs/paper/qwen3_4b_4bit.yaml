@@ -9,8 +9,15 @@ quantization:
   group_size: 128
   symmetric: true
   scale_clip_search: greedy
-  awq_alpha_candidates: [0.0, 0.1, 0.2, 0.3]
-  clip_candidates: [0.93, 0.9, 0.87, 0.85]
+  search_objective: hybrid
+  output_error_rows: 32
+  output_error_weight: 0.5
+  hessian_error_weight: 1.0
+  awq_scale_normalization: geometric_mean
+  awq_min_scale: 0.125
+  awq_max_scale: 8.0
+  awq_alpha_candidates: [0.0, 0.1, 0.2, 0.3, 0.4]
+  clip_candidates: [1.0, 0.95, 0.93, 0.9, 0.87, 0.85]
 
 outliers:
   enabled: true
@@ -22,11 +29,11 @@ outliers:
 sketch:
   enabled: true
   mode: diagonal_low_rank
-  rank: 8
+  rank: 16
   max_rows_per_batch: 128
   diagonal_floor: 0.000001
-  low_rank_weight: 0.15
-  normalize_error_terms: false
+  low_rank_weight: 0.20
+  normalize_error_terms: true
 
 calibration:
   source: dataset
@@ -56,7 +63,7 @@ evaluation:
   measure_throughput: true
 
 output:
-  run_name: qwen3_4b_4bit_qwen_gptq_fair_packed_eval2048
+  run_name: qwen3_4b_4bit_qwen_gptq_fair_balanced_packed_eval2048
   output_dir: artifacts
   save_model: false
 

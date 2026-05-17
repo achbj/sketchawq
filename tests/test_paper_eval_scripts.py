@@ -421,7 +421,7 @@ def test_qwen3_8b_paper_configs_match_gptq_fair_comparison_shape() -> None:
     assert four_bit.quantization.clip_candidates == [0.93, 0.9, 0.87, 0.85]
 
 
-def test_qwen3_4b_paper_configs_match_gptq_fair_comparison_shape() -> None:
+def test_qwen3_4b_paper_configs_use_balanced_fair_comparison_shape() -> None:
     three_bit = load_config(PROJECT_ROOT / "configs/paper/qwen3_4b_3bit.yaml")
     four_bit = load_config(PROJECT_ROOT / "configs/paper/qwen3_4b_4bit.yaml")
     three_bit_baseline = load_baseline_config(
@@ -432,14 +432,21 @@ def test_qwen3_4b_paper_configs_match_gptq_fair_comparison_shape() -> None:
     )
 
     assert three_bit.quantization.group_size == three_bit_baseline.quantization.group_size == 128
-    assert three_bit.quantization.search_objective == "weighted_error"
-    assert three_bit.quantization.output_error_rows == 0
-    assert three_bit.quantization.awq_alpha_candidates == [0.0, 0.125, 0.25, 0.5]
-    assert three_bit.quantization.clip_candidates == [0.82, 0.8]
+    assert three_bit.quantization.scale_clip_search == "greedy"
+    assert three_bit.quantization.search_objective == "hybrid"
+    assert three_bit.quantization.output_error_rows == 64
+    assert three_bit.quantization.output_error_weight == 0.5
+    assert three_bit.quantization.awq_alpha_candidates == [0.0, 0.125, 0.25, 0.375, 0.5]
+    assert three_bit.quantization.clip_candidates == [0.87, 0.85, 0.82, 0.8, 0.78]
     assert four_bit.quantization.group_size == four_bit_baseline.quantization.group_size == 128
-    assert four_bit.quantization.search_objective == "weighted_error"
-    assert four_bit.quantization.awq_alpha_candidates == [0.0, 0.1, 0.2, 0.3]
-    assert four_bit.quantization.clip_candidates == [0.93, 0.9, 0.87, 0.85]
+    assert four_bit.quantization.scale_clip_search == "greedy"
+    assert four_bit.quantization.search_objective == "hybrid"
+    assert four_bit.quantization.output_error_rows == 32
+    assert four_bit.quantization.output_error_weight == 0.5
+    assert four_bit.quantization.awq_alpha_candidates == [0.0, 0.1, 0.2, 0.3, 0.4]
+    assert four_bit.quantization.clip_candidates == [1.0, 0.95, 0.93, 0.9, 0.87, 0.85]
+    assert four_bit.sketch.rank == 16
+    assert four_bit.sketch.normalize_error_terms is True
 
 
 def test_qwen3_4b_best_configs_keep_accuracy_oriented_shape() -> None:
@@ -466,7 +473,7 @@ def test_sync_results_script_dry_runs_qwen3_4b_fair_configs() -> None:
         text=True,
     )
 
-    assert "modal volume get --force sketchawq-artifacts /qwen3_4b_3bit_qwen_gptq_fair_packed_eval2048" in result.stdout
+    assert "modal volume get --force sketchawq-artifacts /qwen3_4b_3bit_qwen_gptq_fair_balanced_packed_eval2048" in result.stdout
     assert "modal volume get --force sketchawq-artifacts /qwen3_4b_gptq_3bit_g128_eval2048" in result.stdout
-    assert "modal volume get --force sketchawq-artifacts /qwen3_4b_4bit_qwen_gptq_fair_packed_eval2048" in result.stdout
+    assert "modal volume get --force sketchawq-artifacts /qwen3_4b_4bit_qwen_gptq_fair_balanced_packed_eval2048" in result.stdout
     assert "modal volume get --force sketchawq-artifacts /qwen3_4b_gptq_4bit_g128_eval2048" in result.stdout

@@ -9,12 +9,15 @@ quantization:
   group_size: 128
   symmetric: true
   scale_clip_search: greedy
-  search_objective: weighted_error
+  search_objective: hybrid
+  output_error_rows: 64
+  output_error_weight: 0.5
+  hessian_error_weight: 1.0
   awq_scale_normalization: geometric_mean
   awq_min_scale: 0.125
   awq_max_scale: 8.0
-  awq_alpha_candidates: [0.0, 0.125, 0.25, 0.5]
-  clip_candidates: [0.82, 0.8]
+  awq_alpha_candidates: [0.0, 0.125, 0.25, 0.375, 0.5]
+  clip_candidates: [0.87, 0.85, 0.82, 0.8, 0.78]
 
 outliers:
   enabled: true
@@ -60,7 +63,7 @@ evaluation:
   measure_throughput: true
 
 output:
-  run_name: qwen3_4b_3bit_qwen_gptq_fair_packed_eval2048
+  run_name: qwen3_4b_3bit_qwen_gptq_fair_balanced_packed_eval2048
   output_dir: artifacts
   save_model: false
 

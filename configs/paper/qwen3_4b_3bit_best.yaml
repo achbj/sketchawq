@@ -6,15 +6,18 @@ model:
 
 quantization:
   bits: 3
-  group_size: 128
+  group_size: 64
   symmetric: true
   scale_clip_search: greedy
-  search_objective: weighted_error
+  search_objective: hybrid
+  output_error_rows: 64
+  output_error_weight: 1.0
+  hessian_error_weight: 1.0
   awq_scale_normalization: geometric_mean
   awq_min_scale: 0.125
   awq_max_scale: 8.0
   awq_alpha_candidates: [0.0, 0.125, 0.25, 0.5]
-  clip_candidates: [0.85, 0.82, 0.8, 0.78]
+  clip_candidates: [0.82, 0.8]
 
 outliers:
   enabled: true
