@@ -124,10 +124,12 @@ def make_text_batches(
         else list(islice(_iter_texts(config), config.num_samples))
     )
     batches: list[CalibrationBatch] = []
+    batch_size = 8
 
-    for text in texts:
+    for i in range(0, len(texts), batch_size):
+        text_batch = texts[i:i + batch_size]
         encoded = tokenizer(
-            text,
+            text_batch,
             max_length=config.sequence_length,
             truncation=True,
             padding="max_length",
@@ -157,8 +159,10 @@ def _make_packed_text_batches(
         )
 
     batches: list[CalibrationBatch] = []
-    for chunk in selected_chunks:
-        input_ids = torch.tensor([chunk], dtype=torch.long, device=device)
+    batch_size = 8  # Group into batches of 8 to fully utilize GPU compute
+    for i in range(0, len(selected_chunks), batch_size):
+        chunk_batch = selected_chunks[i:i + batch_size]
+        input_ids = torch.tensor(chunk_batch, dtype=torch.long, device=device)
         attention_mask = torch.ones_like(input_ids, device=device)
         batches.append(CalibrationBatch(input_ids=input_ids, attention_mask=attention_mask))
     return batches
