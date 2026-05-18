@@ -300,6 +300,82 @@ def test_generic_script_rejects_gpu_override_for_local_backend() -> None:
     assert "--gpu only applies to the modal backend" in result.stderr
 
 
+def test_inference_script_dry_runs_modal_a100() -> None:
+    script = PROJECT_ROOT / "scripts" / "run_inference_eval.sh"
+
+    result = subprocess.run(
+        [
+            str(script),
+            "qwen3_4b",
+            "4",
+            "--variant",
+            "sketchawq-dense",
+            "--gpu",
+            "A100",
+            "--prompt-lengths",
+            "128,512",
+            "--batch-sizes",
+            "1,4",
+            "--generated-tokens",
+            "16",
+            "--dry-run",
+        ],
+        cwd=PROJECT_ROOT,
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+
+    assert "SKETCHAWQ_MODAL_GPU=A100 modal run infra/modal/inference_app.py" in result.stdout
+    assert "--config configs/paper/qwen3_4b_4bit.yaml" in result.stdout
+    assert "--variant sketchawq-dense" in result.stdout
+    assert "--prompt-lengths 128\\,512" in result.stdout
+    assert "--batch-sizes 1\\,4" in result.stdout
+    assert "--generated-tokens 16" in result.stdout
+
+
+def test_inference_script_dry_runs_local() -> None:
+    script = PROJECT_ROOT / "scripts" / "run_inference_eval.sh"
+
+    result = subprocess.run(
+        [
+            str(script),
+            "qwen3_1_7b",
+            "3",
+            "--variant",
+            "fp16",
+            "--local",
+            "--prompt-lengths",
+            "16 32",
+            "--batch-sizes",
+            "1",
+            "--dry-run",
+        ],
+        cwd=PROJECT_ROOT,
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+
+    assert "python -m sketchawq.cli inference configs/paper/qwen3_1_7b_3bit.yaml" in result.stdout
+    assert "--prompt-lengths 16 32" in result.stdout
+    assert "--batch-sizes 1" in result.stdout
+
+
+def test_inference_script_rejects_gpu_override_for_local_backend() -> None:
+    script = PROJECT_ROOT / "scripts" / "run_inference_eval.sh"
+
+    result = subprocess.run(
+        [str(script), "qwen3_4b", "4", "--local", "--gpu", "A100", "--dry-run"],
+        cwd=PROJECT_ROOT,
+        capture_output=True,
+        text=True,
+    )
+
+    assert result.returncode != 0
+    assert "--gpu only applies to the modal backend" in result.stderr
+
+
 def test_sync_results_script_dry_runs_qwen3_8b_both_bits_and_methods() -> None:
     script = PROJECT_ROOT / "scripts" / "sync_paper_eval_results.sh"
 

@@ -94,14 +94,14 @@ def _make_project_root(path: Path) -> Path:
     return path
 
 
-@pytest.mark.parametrize("filename", ["sketchawq_app.py", "baseline_app.py"])
+@pytest.mark.parametrize("filename", ["sketchawq_app.py", "baseline_app.py", "inference_app.py"])
 def test_modal_entrypoint_resolves_local_project_root(filename: str) -> None:
     module = _load_entrypoint(filename)
 
     assert module.PROJECT_ROOT == PROJECT_ROOT
 
 
-@pytest.mark.parametrize("filename", ["sketchawq_app.py", "baseline_app.py"])
+@pytest.mark.parametrize("filename", ["sketchawq_app.py", "baseline_app.py", "inference_app.py"])
 def test_modal_entrypoint_resolves_project_root_from_nested_file(
     filename: str,
     tmp_path: Path,
@@ -115,7 +115,7 @@ def test_modal_entrypoint_resolves_project_root_from_nested_file(
     assert module._resolve_project_root(nested_file) == project_root.resolve()
 
 
-@pytest.mark.parametrize("filename", ["sketchawq_app.py", "baseline_app.py"])
+@pytest.mark.parametrize("filename", ["sketchawq_app.py", "baseline_app.py", "inference_app.py"])
 def test_modal_entrypoint_resolves_remote_project_root(filename: str, tmp_path: Path) -> None:
     module = _load_entrypoint(filename)
     remote_root = _make_project_root(tmp_path / "root" / "sketchawq")

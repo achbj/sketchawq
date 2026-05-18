@@ -379,6 +379,59 @@ Decision:
 Next action:
 - Run the first A100 inference matrix with prompt lengths 128/512/2048, generated tokens 128, and batch sizes 1/4.
 
+### 2026-05-18 - First Qwen3-4B A100 Inference Matrix
+
+Status:
+- Done, but not frozen for claims.
+
+Artifacts:
+- `artifacts/modal/inference/inference/qwen3_4b_4bit_qwen_gptq_fair_balanced_packed_eval2048_fp16_inference_20260518_183049`
+- `artifacts/modal/inference/inference/qwen3_4b_4bit_qwen_gptq_fair_balanced_packed_eval2048_sketchawq_dense_inference_20260518_183159`
+- `artifacts/modal/inference/inference/qwen3_4b_3bit_qwen_gptq_fair_balanced_packed_eval2048_sketchawq_dense_inference_20260518_183241`
+- `artifacts/modal/inference/inference/qwen3_4b_3bit_qwen_gptq_fair_balanced_packed_eval2048_fp16_inference_20260518_183548`
+- Each run directory contains its own `inference_metrics.csv`; use those per-run CSVs as the source of truth.
+- The appendable root CSV at `artifacts/modal/inference/inference/inference_metrics.csv` currently contains only a subset, so do not treat it as the complete merged board until append/volume behavior is checked.
+
+Setup:
+- Model: `Qwen/Qwen3-4B`
+- GPU: `NVIDIA A100-SXM4-40GB`
+- Prompt lengths: 128, 512, 2048
+- Batch sizes: 1, 4
+- Generated tokens: 128
+- Warmup runs: 1
+- Backend label: `transformers_generate_loop`
+- Runtime formats: `fp16`, `sketchawq_dense_dequantized`
+
+Key rows:
+
+| Bits/config | Variant | Prompt | Batch | Prefill tok/s | Decode tok/s | Generate tok/s | Peak MB |
+| --- | --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| 4-bit config | FP16 | 128 | 1 | 2403.7 | 19.50 | 38.69 | 8111.9 |
+| 4-bit config | SketchAWQ dense | 128 | 1 | 2385.3 | 19.12 | 37.94 | 8120.3 |
+| 4-bit config | FP16 | 2048 | 4 | 17358.8 | 75.80 | 1204.48 | 11792.8 |
+| 4-bit config | SketchAWQ dense | 2048 | 4 | 17347.8 | 73.59 | 1171.45 | 11801.2 |
+| 3-bit config | FP16 | 128 | 1 | 3522.9 | 28.36 | 56.27 | 8111.9 |
+| 3-bit config | SketchAWQ dense | 128 | 1 | 2608.9 | 20.88 | 41.42 | 8120.3 |
+| 3-bit config | FP16 | 2048 | 4 | 17834.9 | 109.08 | 1689.11 | 11792.8 |
+| 3-bit config | SketchAWQ dense | 2048 | 4 | 17063.0 | 78.65 | 1245.28 | 11801.2 |
+
+Ratio summary:
+
+| Pair | Prefill ratio | Decode ratio | Generate ratio |
+| --- | ---: | ---: | ---: |
+| 4-bit dense / matching FP16 median | 0.987x | 0.983x | 0.983x |
+| 3-bit dense / matching FP16 median | 0.793x | 0.730x | 0.735x |
+| 3-bit-config FP16 / 4-bit-config FP16 median | 1.351x | 1.469x | 1.463x |
+
+Decision:
+- The 4-bit dense simulated run behaves approximately like FP16, which is expected because it still executes dense dequantized weights.
+- The 3-bit dense-vs-FP16 ratio is not reliable as a method conclusion because the two FP16 runs for the same Qwen3-4B base model differ by about 1.35-1.47x median depending on metric.
+- Therefore this first matrix validates the harness and reinforces that dense simulation is not a packed inference speed story, but it is too noisy for final throughput claims.
+
+Next action:
+- Repeat the inference benchmark with more warmup or repeated measurements and summarize median/min/max.
+- Then add a GPTQ backend inference row or move toward an int4 packed SketchAWQ backend/export path.
+
 ### Inference
 
 - FP16 generate benchmark for Qwen3-4B on A100.

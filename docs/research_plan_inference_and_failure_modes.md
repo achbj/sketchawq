@@ -269,7 +269,8 @@ For each model and bit-width:
 
 - [x] Add a benchmark command or script that can run FP16 and dense simulated SketchAWQ first.
 - [x] Record prompt length, generated tokens, batch size, GPU, and runtime format.
-- [ ] Run the first A100 Qwen3-4B FP16 and SketchAWQ dense-simulation matrix.
+- [x] Run the first A100 Qwen3-4B FP16 and SketchAWQ dense-simulation matrix.
+- [ ] Repeat the FP16/dense matrix with more warmup or repeated measurements before making final speed claims.
 - [ ] Add GPTQ backend benchmarking once saved/loadable GPTQ model handling is settled.
 - [ ] Do not claim packed speed yet.
 
