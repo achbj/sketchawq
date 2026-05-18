@@ -274,6 +274,7 @@ def build_baseline_evaluation_rows(
     config: ExternalBaselineConfig,
 ) -> list[dict[str, Any]]:
     metadata = report.get("metadata", {})
+    environment = metadata.get("environment", {})
     rows: list[dict[str, Any]] = []
     for key in ("original", "quantized"):
         item = _variant_evaluation(report.get("evaluation", {}), key)
@@ -300,6 +301,7 @@ def build_baseline_evaluation_rows(
                 "tokens": throughput.get("tokens"),
                 "cuda_peak_memory_mb": item.get("cuda_peak_memory_mb"),
                 "output_dir": report.get("output_dir"),
+                "gpu_name": environment.get("gpu_name"),
             }
         )
     return rows

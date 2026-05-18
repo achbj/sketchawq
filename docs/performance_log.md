@@ -52,12 +52,12 @@ Bundle: `artifacts/paper_eval/qwen3_4b_3_4bit_paper_eval_20260517_192225`
 
 Compared with the earlier balanced bundle `artifacts/paper_eval/OLD/qwen3_4b_3_4bit_paper_eval_20260517_163259`:
 
-| Bits | Run | Quant time | Stats time | PPL |
-| --- | --- | ---: | ---: | ---: |
-| 3 | old balanced | 231.48s | 208.62s | 17.7010 |
-| 3 | GPU accumulators + search-grid edit | 188.70s | 165.42s | 17.7015 |
-| 4 | old balanced | 208.41s | 184.37s | 15.8668 |
-| 4 | GPU accumulators + search-grid edit | 165.70s | 143.34s | 16.0346 |
+| Bits | Run | GPU recorded | Quant time | Stats time | PPL |
+| --- | --- | --- | ---: | ---: | ---: |
+| 3 | old balanced | NVIDIA A10 | 231.48s | 208.62s | 17.7010 |
+| 3 | GPU accumulators + search-grid edit | NVIDIA A10G | 188.70s | 165.42s | 17.7015 |
+| 4 | old balanced | NVIDIA A10 | 208.41s | 184.37s | 15.8668 |
+| 4 | GPU accumulators + search-grid edit | NVIDIA A10 | 165.70s | 143.34s | 16.0346 |
 
 The accumulator change reduced stats time by about 20-22%, but it did not collapse the phase to the hoped-for range. The remaining stats cost is likely dominated by model forward passes, per-layer row sampling, and the sketch matrix products inside hooks.
 
@@ -73,12 +73,12 @@ We tried keeping search stats on GPU through layer quantization and batching can
 
 The experiment did not improve runtime. Recent Qwen3-4B bundles showed layer time staying flat or increasing:
 
-| Bundle | Bits | Quant time | Stats time | Layer time | PPL |
-| --- | ---: | ---: | ---: | ---: | ---: |
-| `20260517_192225` | 3 | 188.70s | 165.42s | 22.48s | 17.7015 |
-| `20260517_203358` | 3 | 200.57s | 174.82s | 24.93s | 17.7015 |
-| `20260517_192225` | 4 | 165.70s | 143.34s | 21.87s | 16.0346 |
-| `20260517_203358` | 4 | 187.14s | 165.02s | 21.55s | 16.0291 |
+| Bundle | Bits | GPU recorded | Quant time | Stats time | Layer time | PPL |
+| --- | ---: | --- | ---: | ---: | ---: | ---: |
+| `20260517_192225` | 3 | NVIDIA A10G | 188.70s | 165.42s | 22.48s | 17.7015 |
+| `20260517_203358` | 3 | NVIDIA A10G | 200.57s | 174.82s | 24.93s | 17.7015 |
+| `20260517_192225` | 4 | NVIDIA A10 | 165.70s | 143.34s | 21.87s | 16.0346 |
+| `20260517_203358` | 4 | NVIDIA A10G | 187.14s | 165.02s | 21.55s | 16.0291 |
 
 ### Decision
 
@@ -118,3 +118,45 @@ This is intentionally low-risk. It may shave some overhead, but its main job is 
 - Focused stats/pipeline/reporting tests passed.
 - Nearby observer, pipeline, reporting, model-save, Hessian sketch, and search tests passed.
 - Full suite passed except the existing Qwen3-4B paper-config candidate-grid expectation mismatch.
+
+## 2026-05-18 - A100 run confirms the GPU ceiling
+
+### Context
+
+After the stats-phase instrumentation was added, Qwen3-4B was rerun on an A100. This finally separated algorithm cost from A10/A10G hardware limits. The calibration setup stayed the fair GPTQ-comparison shape:
+
+- model: `Qwen/Qwen3-4B`
+- calibration: C4 train, 256 packed samples, sequence length 2048
+- evaluation: WikiText2 validation packed eval2048
+- group size: 128
+- SketchAWQ stats accumulators: `cuda`, `float32`
+
+### Result
+
+The A100 run shows that GPU throughput, especially during stats collection, was the main speed limiter in the earlier Modal runs. On A10/A10G, stats collection was typically 145-175s after the GPU-accumulator fix. On A100, it dropped to 55-66s while preserving the same calibration/evaluation shape.
+
+| Bundle | Bits | Method | GPU recorded | Quant time | Stats forward | Stats total | Layer time | PPL |
+| --- | ---: | --- | --- | ---: | ---: | ---: | ---: | ---: |
+| `20260517_225427` | 3 | SketchAWQ | NVIDIA A10G | 173.35s | 146.37s | 147.57s | 24.77s | 17.7015 |
+| `20260518_122209` | 3 | SketchAWQ | NVIDIA A100-SXM4-40GB | 78.70s | 64.73s | 65.57s | 12.29s | 17.6985 |
+| `20260517_225427` | 4 | SketchAWQ | NVIDIA A10G | 167.44s | 144.20s | 144.73s | 22.13s | 16.0291 |
+| `20260518_122209` | 4 | SketchAWQ | NVIDIA A100-SXM4-40GB | 65.62s | 54.47s | 54.94s | 10.24s | 16.0282 |
+
+The timing fields also explain where the time goes. For the A100 4-bit run, `collect_stats_seconds=54.94s` and `stats_forward_seconds=54.47s`, so nearly all stats time is real model-forward plus hook work, not final CPU movement or reporting overhead. The all-ones mask fast path was active for packed calibration (`stats_attention_mask_fast_path_batches=256` in the run summaries).
+
+### GPTQ comparison on A100
+
+The same A100 paper-eval bundle also contains GPTQ baselines. SketchAWQ is now much faster to quantize, while still slightly behind GPTQ in PPL:
+
+| Bits | Method | GPU recorded | Quant time | PPL | Speedup vs GPTQ |
+| ---: | --- | --- | ---: | ---: | ---: |
+| 3 | GPTQ | NVIDIA A100-SXM4-40GB | 904.35s | 17.6109 | 1.00x |
+| 3 | SketchAWQ | NVIDIA A100-SXM4-40GB | 78.70s | 17.6985 | 11.49x |
+| 4 | GPTQ | NVIDIA A100-SXM4-40GB | 853.17s | 15.8523 | 1.00x |
+| 4 | SketchAWQ | NVIDIA A100-SXM4-40GB | 65.62s | 16.0282 | 13.00x |
+
+This is the clearest result so far: with proper GPU throughput, SketchAWQ's quantization path is more than 10x faster than GPTQ for Qwen3-4B under the fair comparison setup. The remaining research target is no longer broad speed, but closing the PPL gap without giving back too much of that speed advantage.
+
+### Decision
+
+Keep recording the actual CUDA-reported `gpu_name` on every experiment record. The run-level summary already carries `gpu_name`; evaluation and layer metric records should also keep it so future CSVs, boards, and plots can be grouped by hardware. For speed conclusions, compare runs only within the same GPU class unless the purpose is explicitly a hardware-scaling comparison.

@@ -28,6 +28,7 @@ BOARD_FIELDS = [
     "collect_stats_seconds",
     "prepare_sketches_seconds",
     "layer_quantization_seconds",
+    "gpu_name",
     "tokens_per_second",
     "fp16_weight_mb",
     "estimated_quantized_mb",
@@ -330,6 +331,7 @@ def _render_html(rows: list[dict[str, str]]) -> str:
           <th>Ratio</th>
           <th>Tokens/s</th>
           <th>Quant Time</th>
+          <th>GPU</th>
           <th>FP16 Size</th>
           <th>Quantized Size</th>
           <th>Compression</th>
@@ -368,6 +370,7 @@ def _render_table_row(row: dict[str, str]) -> str:
         _format_float(row.get("perplexity_ratio"), digits=3),
         _format_float(row.get("tokens_per_second"), digits=1),
         _format_float(row.get("quantization_seconds"), digits=2),
+        html.escape(str(row.get("gpu_name", ""))),
         _format_size_mb(row.get("fp16_weight_mb")),
         _format_size_mb(row.get("estimated_quantized_mb")),
         _format_compression(row.get("estimated_compression_ratio")),

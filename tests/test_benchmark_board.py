@@ -25,6 +25,7 @@ def _sample_rows() -> list[dict[str, str]]:
             "perplexity": "8.15",
             "original_perplexity": "7.95",
             "tokens_per_second": "920.5",
+            "gpu_name": "NVIDIA A100-SXM4-40GB",
             "calibration_source": "dataset",
             "calibration_dataset": "allenai/c4",
             "calibration_samples": "128",
@@ -49,6 +50,7 @@ def _sample_rows() -> list[dict[str, str]]:
             "perplexity": "8.17",
             "original_perplexity": "7.95",
             "tokens_per_second": "880.1",
+            "gpu_name": "NVIDIA A100-SXM4-40GB",
             "calibration_source": "dataset",
             "calibration_dataset": "allenai/c4",
             "calibration_samples": "128",
@@ -73,6 +75,7 @@ def _sample_rows() -> list[dict[str, str]]:
             "perplexity": "8.81",
             "original_perplexity": "7.95",
             "tokens_per_second": "845.2",
+            "gpu_name": "NVIDIA A100-SXM4-40GB",
             "calibration_source": "dataset",
             "calibration_dataset": "allenai/c4",
             "calibration_samples": "128",
@@ -97,6 +100,7 @@ def _sample_rows() -> list[dict[str, str]]:
             "perplexity": "9.12",
             "original_perplexity": "7.95",
             "tokens_per_second": "900.0",
+            "gpu_name": "NVIDIA A100-SXM4-40GB",
             "calibration_source": "dataset",
             "calibration_dataset": "allenai/c4",
             "calibration_samples": "128",
@@ -146,6 +150,8 @@ def test_html_summary_explains_context_and_delta_columns() -> None:
     assert "Delta vs Best" in html
     assert "Model Size" in html
     assert "FP16 Size" in html
+    assert "GPU" in html
+    assert "NVIDIA A100-SXM4-40GB" in html
     assert "Quantized Size" in html
     assert "Calibration Data" in html
     assert "Evaluation Data" in html
@@ -170,6 +176,7 @@ def test_board_csv_includes_derived_comparison_fields(tmp_path: Path) -> None:
     assert "fp16_weight_mb" in header
     assert "estimated_quantized_mb" in header
     assert "estimated_compression_ratio" in header
+    assert "gpu_name" in header
 
 
 def test_benchmark_plot_writes_png_when_matplotlib_is_available(tmp_path: Path) -> None:

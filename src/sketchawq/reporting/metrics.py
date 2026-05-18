@@ -123,6 +123,7 @@ EVALUATION_METRIC_FIELDS = [
     "tokens",
     "cuda_peak_memory_mb",
     "output_dir",
+    "gpu_name",
 ]
 
 LAYER_METRIC_FIELDS = [
@@ -161,6 +162,7 @@ LAYER_METRIC_FIELDS = [
     "outlier_scale_boost",
     "outlier_channels",
     "protected_channels",
+    "gpu_name",
 ]
 
 
@@ -306,6 +308,7 @@ def build_evaluation_metric_rows(
     config: SketchAWQConfig,
 ) -> list[dict[str, Any]]:
     metadata = report.get("metadata", {})
+    environment = metadata.get("environment", {})
     rows: list[dict[str, Any]] = []
     for key in ("original", "quantized"):
         item = _variant_evaluation(report.get("evaluation", {}), key)
@@ -332,6 +335,7 @@ def build_evaluation_metric_rows(
                 "tokens": throughput.get("tokens"),
                 "cuda_peak_memory_mb": item.get("cuda_peak_memory_mb"),
                 "output_dir": report.get("output_dir"),
+                "gpu_name": environment.get("gpu_name"),
             }
         )
     return rows
@@ -344,6 +348,7 @@ def build_layer_metric_rows(
     quant = report.get("quantization", {})
     run_id = report.get("metadata", {}).get("run_id")
     run_name = report.get("metadata", {}).get("run_name", config.output.run_name)
+    gpu_name = report.get("metadata", {}).get("environment", {}).get("gpu_name")
     rows = []
     for layer in quant.get("layers", []):
         rows.append(
@@ -392,6 +397,7 @@ def build_layer_metric_rows(
                 ),
                 "outlier_channels": layer.get("outlier_channels", 0),
                 "protected_channels": layer.get("protected_channels", 0),
+                "gpu_name": gpu_name,
             }
         )
     return rows
