@@ -29,7 +29,7 @@ outliers:
 sketch:
   enabled: true
   mode: diagonal_low_rank
-  rank: 16
+  rank: 64
   max_rows_per_batch: 128
   diagonal_floor: 0.000001
   low_rank_weight: 0.20
