@@ -170,16 +170,22 @@ class ActivationObserver:
             stats.abs_sum.add_(flat.abs().sum(dim=0).to(device=stats.abs_sum.device))
             stats.sq_sum.add_(flat.pow(2).sum(dim=0).to(device=stats.sq_sum.device))
             stats.count += flat.shape[0]
+            batch_multiplier = _activation_batch_multiplier(activation)
 
             if self.activation_sample_rows > 0:
                 rows = _sample_rows(
                     flat,
-                    self.activation_sample_rows,
+                    self.activation_sample_rows * batch_multiplier,
                     method=self.row_sampling,
                     generator=self._sample_generators.get(name),
                 )
                 if stats.activation_sample is None:
-                    stats.activation_sample = rows
+                    stats.activation_sample = _sample_rows(
+                        rows,
+                        self.activation_sample_rows,
+                        method=self.row_sampling,
+                        generator=self._sample_generators.get(name),
+                    )
                 else:
                     combined = torch.cat([stats.activation_sample, rows], dim=0)
                     stats.activation_sample = _sample_rows(
@@ -192,7 +198,7 @@ class ActivationObserver:
             if stats.sketch_omega is not None and stats.sketch_sum is not None:
                 rows = _sample_rows(
                     flat,
-                    self.max_rows_per_batch,
+                    self.max_rows_per_batch * batch_multiplier,
                     method=self.row_sampling,
                     generator=self._row_generators.get(name),
                 )
@@ -203,6 +209,12 @@ class ActivationObserver:
                 stats.sketch_count += rows.shape[0]
 
         return hook
+
+
+def _activation_batch_multiplier(activation: torch.Tensor) -> int:
+    if activation.ndim >= 3:
+        return max(int(activation.shape[0]), 1)
+    return 1
 
 
 def _select_unmasked_rows(

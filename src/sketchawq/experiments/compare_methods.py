@@ -55,7 +55,25 @@ def _summary_from_report(path: Path) -> dict:
             "benchmark": config.get("evaluation", {}).get("benchmark_name"),
             "calibration_source": config.get("calibration", {}).get("source"),
             "calibration_dataset": config.get("calibration", {}).get("dataset_name"),
+            "calibration_split": config.get("calibration", {}).get("split"),
             "calibration_samples": config.get("calibration", {}).get("num_samples"),
+            "calibration_sequence_length": config.get("calibration", {}).get("sequence_length"),
+            "calibration_packing": config.get("calibration", {}).get("packing"),
+            "calibration_batch_size": config.get("method", {}).get(
+                "calibration_batch_size",
+                config.get("calibration", {}).get("batch_size"),
+            ),
+            "evaluation_source": config.get("evaluation", {}).get("source"),
+            "evaluation_dataset": config.get("evaluation", {}).get("dataset_name"),
+            "evaluation_split": config.get("evaluation", {}).get("split"),
+            "evaluation_samples": config.get("evaluation", {}).get("num_samples"),
+            "evaluation_sequence_length": config.get("evaluation", {}).get("sequence_length"),
+            "evaluation_packing": config.get("evaluation", {}).get("packing"),
+            "evaluation_batch_size": (
+                config.get("calibration", {}).get("batch_size")
+                if config.get("evaluation", {}).get("use_calibration_data")
+                else config.get("evaluation", {}).get("batch_size")
+            ),
             "sequence_length": config.get("calibration", {}).get("sequence_length"),
             "num_layers": quant.get("num_layers"),
             "quantization_seconds": quant.get("elapsed_seconds"),

@@ -114,6 +114,29 @@ def test_collect_layer_stats_returns_cpu_stats_after_gpu_accumulation() -> None:
     assert stats.activation_sample.device.type == "cpu"
 
 
+def test_batched_calibration_preserves_per_sample_sketch_row_budget() -> None:
+    model = MaskedToyModel()
+    batch = CalibrationBatch(
+        input_ids=torch.arange(16, dtype=torch.float32).reshape(2, 4, 2),
+        attention_mask=torch.ones(2, 4, dtype=torch.long),
+    )
+
+    stats = collect_layer_stats(
+        model,
+        [batch],
+        sketch_rank=1,
+        max_rows_per_batch=3,
+        seed=0,
+        row_sampling="linspace",
+        activation_sample_rows=2,
+    )["proj"]
+
+    assert stats.count == 8
+    assert stats.sketch_count == 6
+    assert stats.activation_sample is not None
+    assert stats.activation_sample.shape == (2, 2)
+
+
 def test_collect_layer_stats_summary_records_forward_shape_and_cache_mode() -> None:
     model = CacheAwareToyModel()
     batch = CalibrationBatch(

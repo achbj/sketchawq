@@ -480,16 +480,19 @@ def test_qwen3_4b_paper_configs_use_balanced_fair_comparison_shape() -> None:
     assert three_bit.quantization.search_objective == "hybrid"
     assert three_bit.quantization.output_error_rows == 64
     assert three_bit.quantization.output_error_weight == 0.5
-    assert three_bit.quantization.awq_alpha_candidates == [0.0, 0.125, 0.25, 0.375, 0.5]
-    assert three_bit.quantization.clip_candidates == [0.87, 0.85, 0.82, 0.8, 0.78]
+    assert three_bit.quantization.awq_alpha_candidates == [0.0, 0.0875, 0.125, 0.175, 0.2, 0.25]
+    assert three_bit.quantization.clip_candidates == [0.8, 0.79, 0.78, 0.77]
+    assert three_bit.sketch.rank == 64
+    assert three_bit.calibration.batch_size == 8
     assert four_bit.quantization.group_size == four_bit_baseline.quantization.group_size == 128
     assert four_bit.quantization.scale_clip_search == "greedy"
     assert four_bit.quantization.search_objective == "hybrid"
     assert four_bit.quantization.output_error_rows == 32
     assert four_bit.quantization.output_error_weight == 0.5
-    assert four_bit.quantization.awq_alpha_candidates == [0.0, 0.1, 0.2, 0.3, 0.4]
-    assert four_bit.quantization.clip_candidates == [1.0, 0.95, 0.93, 0.9, 0.87, 0.85]
-    assert four_bit.sketch.rank == 16
+    assert four_bit.quantization.awq_alpha_candidates == [0.0, 0.0875, 0.125, 0.175, 0.2, 0.25]
+    assert four_bit.quantization.clip_candidates == [0.88, 0.87, 0.86, 0.85]
+    assert four_bit.sketch.rank == 64
+    assert four_bit.calibration.batch_size == 8
     assert four_bit.sketch.normalize_error_terms is True
 
 

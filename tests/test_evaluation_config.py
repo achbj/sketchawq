@@ -28,6 +28,7 @@ def test_sketchawq_evaluation_batches_can_use_packed_validation(monkeypatch) -> 
     config.evaluation.num_samples = 128
     config.evaluation.sequence_length = 1024
     config.evaluation.packing = True
+    config.evaluation.batch_size = 4
 
     run_quantization._make_evaluation_batches(
         object(),
@@ -43,6 +44,7 @@ def test_sketchawq_evaluation_batches_can_use_packed_validation(monkeypatch) -> 
     assert batch_config.num_samples == 128
     assert batch_config.sequence_length == 1024
     assert batch_config.packing is True
+    assert batch_config.batch_size == 4
 
 
 def test_sketchawq_evaluation_batches_can_request_full_split(monkeypatch) -> None:

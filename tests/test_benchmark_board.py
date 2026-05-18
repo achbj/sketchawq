@@ -31,11 +31,13 @@ def _sample_rows() -> list[dict[str, str]]:
             "calibration_samples": "128",
             "calibration_sequence_length": "2048",
             "calibration_packing": "true",
+            "calibration_batch_size": "8",
             "sequence_length": "2048",
             "evaluation_dataset": "wikitext",
             "evaluation_samples": "64",
             "evaluation_sequence_length": "2048",
             "evaluation_packing": "true",
+            "evaluation_batch_size": "1",
             "fp16_weight_mb": "8192",
             "estimated_quantized_mb": "2300",
             "estimated_compression_ratio": "3.56",
@@ -56,11 +58,13 @@ def _sample_rows() -> list[dict[str, str]]:
             "calibration_samples": "128",
             "calibration_sequence_length": "2048",
             "calibration_packing": "true",
+            "calibration_batch_size": "8",
             "sequence_length": "2048",
             "evaluation_dataset": "wikitext",
             "evaluation_samples": "64",
             "evaluation_sequence_length": "2048",
             "evaluation_packing": "true",
+            "evaluation_batch_size": "1",
             "fp16_weight_mb": "8192",
             "estimated_quantized_mb": "2500",
             "estimated_compression_ratio": "3.28",
@@ -81,11 +85,13 @@ def _sample_rows() -> list[dict[str, str]]:
             "calibration_samples": "128",
             "calibration_sequence_length": "2048",
             "calibration_packing": "true",
+            "calibration_batch_size": "8",
             "sequence_length": "2048",
             "evaluation_dataset": "wikitext",
             "evaluation_samples": "64",
             "evaluation_sequence_length": "2048",
             "evaluation_packing": "true",
+            "evaluation_batch_size": "1",
             "fp16_weight_mb": "8192",
             "estimated_quantized_mb": "1900",
             "estimated_compression_ratio": "4.31",
@@ -106,11 +112,13 @@ def _sample_rows() -> list[dict[str, str]]:
             "calibration_samples": "128",
             "calibration_sequence_length": "2048",
             "calibration_packing": "true",
+            "calibration_batch_size": "8",
             "sequence_length": "2048",
             "evaluation_dataset": "wikitext",
             "evaluation_samples": "64",
             "evaluation_sequence_length": "2048",
             "evaluation_packing": "true",
+            "evaluation_batch_size": "1",
             "fp16_weight_mb": "8192",
             "estimated_quantized_mb": "2100",
             "estimated_compression_ratio": "3.90",
@@ -158,6 +166,7 @@ def test_html_summary_explains_context_and_delta_columns() -> None:
     assert "allenai/c4" in html
     assert "128 samples" in html
     assert "seq 2048" in html
+    assert "batch 8" in html
     assert "dense dequantized simulation" in html
 
 
@@ -177,6 +186,7 @@ def test_board_csv_includes_derived_comparison_fields(tmp_path: Path) -> None:
     assert "estimated_quantized_mb" in header
     assert "estimated_compression_ratio" in header
     assert "gpu_name" in header
+    assert "calibration_batch_size" in header
 
 
 def test_benchmark_plot_writes_png_when_matplotlib_is_available(tmp_path: Path) -> None:

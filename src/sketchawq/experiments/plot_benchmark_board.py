@@ -39,12 +39,14 @@ BOARD_FIELDS = [
     "calibration_samples",
     "calibration_sequence_length",
     "calibration_packing",
+    "calibration_batch_size",
     "evaluation_source",
     "evaluation_dataset",
     "evaluation_split",
     "evaluation_samples",
     "evaluation_sequence_length",
     "evaluation_packing",
+    "evaluation_batch_size",
     "sequence_length",
     "output_dir",
 ]
@@ -523,6 +525,7 @@ def _combined_data_context(
     if prefix == "calibration" and not sequence_lengths:
         sequence_lengths = _unique_values(rows, "sequence_length")
     packing_values = _unique_values(rows, f"{prefix}_packing")
+    batch_sizes = _unique_values(rows, f"{prefix}_batch_size")
 
     parts = []
     if fallback_labels:
@@ -535,6 +538,8 @@ def _combined_data_context(
         parts.append(f"seq {', '.join(sequence_lengths)}")
     if packing_values and any(v.lower() == "true" for v in packing_values):
         parts.append("packed")
+    if batch_sizes:
+        parts.append(f"batch {', '.join(batch_sizes)}")
     return " · ".join(parts) if parts else "not recorded"
 
 

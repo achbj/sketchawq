@@ -292,12 +292,15 @@ class CalibrationConfig:
     sequence_length: int = 128
     seed: int = 42
     packing: bool = False
+    batch_size: int = 1
 
     def validate(self) -> None:
         if self.num_samples <= 0:
             raise ValueError("num_samples must be positive")
         if self.sequence_length <= 0:
             raise ValueError("sequence_length must be positive")
+        if self.batch_size <= 0:
+            raise ValueError("calibration.batch_size must be positive")
 
 
 @dataclass(slots=True)
@@ -314,6 +317,7 @@ class EvaluationConfig:
     num_samples: int | None = 32
     sequence_length: int = 1024
     packing: bool = False
+    batch_size: int = 1
     max_batches: int | None = 4
     measure_throughput: bool = False
     throughput_warmup_batches: int = 1
@@ -323,6 +327,8 @@ class EvaluationConfig:
             raise ValueError("evaluation.num_samples must be positive")
         if self.sequence_length <= 0:
             raise ValueError("evaluation.sequence_length must be positive")
+        if self.batch_size <= 0:
+            raise ValueError("evaluation.batch_size must be positive")
         if self.max_batches is not None and self.max_batches <= 0:
             raise ValueError("evaluation.max_batches must be positive")
         if self.throughput_warmup_batches < 0:

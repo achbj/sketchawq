@@ -160,3 +160,41 @@ This is the clearest result so far: with proper GPU throughput, SketchAWQ's quan
 ### Decision
 
 Keep recording the actual CUDA-reported `gpu_name` on every experiment record. The run-level summary already carries `gpu_name`; evaluation and layer metric records should also keep it so future CSVs, boards, and plots can be grouped by hardware. For speed conclusions, compare runs only within the same GPU class unless the purpose is explicitly a hardware-scaling comparison.
+
+## 2026-05-18 - Config-controlled calibration batching
+
+### Context
+
+The A100 result showed that SketchAWQ can be more than 10x faster than GPTQ on Qwen3-4B, but stats collection still dominates runtime. A quick local edit batched calibration forwards with `batch_size=8`, which is the right speed direction, but hard-coding that in the data loader made every config inherit the same memory requirement and broke legacy tests that expected one sample per batch.
+
+### Change
+
+Calibration and evaluation batch construction now have explicit config knobs:
+
+- `calibration.batch_size` controls how many padded samples or packed chunks are sent through each SketchAWQ stats forward.
+- `evaluation.batch_size` controls evaluation batches when evaluation builds its own data instead of reusing calibration data.
+- both default to `1`, so existing configs keep their original behavior unless they opt in.
+- Qwen3-4B fair and best SketchAWQ configs opt into `calibration.batch_size: 8`, because that model/config has already been validated on A100-class hardware.
+
+The observer also scales `sketch.max_rows_per_batch` by the runtime batch dimension for `[batch, seq, hidden]` activations. This keeps the total sketch row budget comparable to the old one-sample-per-forward path; otherwise batching would be faster but would silently collect fewer sketch rows. The retained hybrid `activation_sample` stays capped at `output_error_rows`, so output-aware search does not become a larger/slower objective just because calibration batches are larger.
+
+### Expected impact
+
+For Qwen3-4B on A100, `calibration.batch_size: 8` should reduce `stats_batches` from 256 to 32 while keeping `stats_tokens` fixed at 524,288 for the 256 x 2048 C4 calibration setup. The exact runtime gain depends on how much overhead comes from per-forward launch/hook work versus raw transformer compute.
+
+This should not change the fair GPTQ comparison data budget:
+
+- same model
+- same C4 calibration split
+- same number of calibration chunks
+- same sequence length
+- same WikiText2 packed evaluation setup
+- same group size 128
+
+### Reporting
+
+Run summaries now record `calibration_batch_size` and `evaluation_batch_size`, alongside the existing `gpu_name`, stats timing, token counts, packing flags, and dataset fields. GPTQ baseline summaries record `calibration_batch_size` as the external method quantization batch size, because that is the actual GPTQ calibration batching knob.
+
+### Risk control
+
+Large models can opt in gradually instead of inheriting `batch_size=8` globally. If an 8B/14B/32B run OOMs, leave the config at the default `1` or try a smaller explicit batch size such as `2` or `4`. Evaluation batching is intentionally left at default `1` in the paper configs to avoid changing PPL/throughput measurement semantics unless we deliberately test that separately.

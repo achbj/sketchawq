@@ -16,7 +16,7 @@ class WhitespaceTokenizer:
 
     def __call__(
         self,
-        text: str,
+        text: str | list[str],
         *,
         max_length: int | None = None,
         truncation: bool = False,
@@ -25,24 +25,32 @@ class WhitespaceTokenizer:
         add_special_tokens: bool = True,
     ) -> dict[str, list[int] | torch.Tensor]:
         del add_special_tokens
-        input_ids = [self._token_id(token) for token in text.split()]
-        if truncation and max_length is not None:
-            input_ids = input_ids[:max_length]
+        texts = text if isinstance(text, list) else [text]
+        all_input_ids = []
+        all_attention_masks = []
+        for item in texts:
+            input_ids = [self._token_id(token) for token in item.split()]
+            if truncation and max_length is not None:
+                input_ids = input_ids[:max_length]
 
-        attention_mask = [1] * len(input_ids)
-        if padding == "max_length":
-            if max_length is None:
-                raise ValueError("max_length is required for max_length padding")
-            pad_count = max_length - len(input_ids)
-            input_ids = input_ids + [self.pad_token_id] * pad_count
-            attention_mask = attention_mask + [0] * pad_count
+            attention_mask = [1] * len(input_ids)
+            if padding == "max_length":
+                if max_length is None:
+                    raise ValueError("max_length is required for max_length padding")
+                pad_count = max_length - len(input_ids)
+                input_ids = input_ids + [self.pad_token_id] * pad_count
+                attention_mask = attention_mask + [0] * pad_count
+            all_input_ids.append(input_ids)
+            all_attention_masks.append(attention_mask)
 
         if return_tensors == "pt":
             return {
-                "input_ids": torch.tensor([input_ids]),
-                "attention_mask": torch.tensor([attention_mask]),
+                "input_ids": torch.tensor(all_input_ids),
+                "attention_mask": torch.tensor(all_attention_masks),
             }
-        return {"input_ids": input_ids, "attention_mask": attention_mask}
+        if isinstance(text, list):
+            return {"input_ids": all_input_ids, "attention_mask": all_attention_masks}
+        return {"input_ids": all_input_ids[0], "attention_mask": all_attention_masks[0]}
 
     def _token_id(self, token: str) -> int:
         if token not in self.vocab:
@@ -114,6 +122,28 @@ def test_unpacked_dataset_calibration_respects_num_samples(monkeypatch) -> None:
     torch.testing.assert_close(batches[1].input_ids, torch.tensor([[2, 0, 0]]))
 
 
+def test_unpacked_calibration_can_batch_samples(monkeypatch) -> None:
+    monkeypatch.setattr(
+        calibration,
+        "load_dataset",
+        lambda *args, **kwargs: [{"text": "alpha"}, {"text": "beta"}, {"text": "gamma"}],
+    )
+    tokenizer = WhitespaceTokenizer()
+    config = CalibrationConfig(
+        source="dataset",
+        num_samples=3,
+        sequence_length=3,
+        packing=False,
+        batch_size=2,
+    )
+
+    batches = make_calibration_batches(tokenizer, config, device=torch.device("cpu"))
+
+    assert [tuple(batch.input_ids.shape) for batch in batches] == [(2, 3), (1, 3)]
+    torch.testing.assert_close(batches[0].input_ids, torch.tensor([[1, 0, 0], [2, 0, 0]]))
+    torch.testing.assert_close(batches[1].input_ids, torch.tensor([[3, 0, 0]]))
+
+
 def test_packed_calibration_builds_full_chunks_without_padding(monkeypatch) -> None:
     monkeypatch.setattr(calibration, "_SYNTHETIC_TEXTS", ["alpha beta", "gamma", "delta epsilon zeta"])
     tokenizer = WhitespaceTokenizer()
@@ -136,6 +166,29 @@ def test_packed_calibration_builds_full_chunks_without_padding(monkeypatch) -> N
     torch.testing.assert_close(batches[1].input_ids, torch.tensor([[99, 4, 5, 6]]))
 
 
+def test_packed_calibration_can_batch_chunks(monkeypatch) -> None:
+    monkeypatch.setattr(calibration, "_SYNTHETIC_TEXTS", ["alpha beta", "gamma", "delta epsilon zeta"])
+    tokenizer = WhitespaceTokenizer()
+    config = CalibrationConfig(
+        source="synthetic",
+        num_samples=2,
+        sequence_length=4,
+        seed=7,
+        packing=True,
+        batch_size=2,
+    )
+
+    batches = make_calibration_batches(tokenizer, config, device=torch.device("cpu"))
+
+    assert len(batches) == 1
+    assert batches[0].input_ids.shape == (2, 4)
+    torch.testing.assert_close(
+        batches[0].input_ids,
+        torch.tensor([[1, 2, 99, 3], [99, 4, 5, 6]]),
+    )
+    torch.testing.assert_close(batches[0].attention_mask, torch.ones((2, 4), dtype=torch.long))
+
+
 def test_config_parses_calibration_packing(tmp_path) -> None:
     config_path = tmp_path / "packed.yaml"
     config_path.write_text(
@@ -145,6 +198,7 @@ calibration:
   num_samples: 2
   sequence_length: 16
   packing: true
+  batch_size: 4
 """,
         encoding="utf-8",
     )
@@ -152,6 +206,7 @@ calibration:
     config = load_config(config_path)
 
     assert config.calibration.packing is True
+    assert config.calibration.batch_size == 4
 
 
 def test_config_parses_evaluation_packing(tmp_path) -> None:
@@ -165,6 +220,7 @@ evaluation:
   sequence_length: 16
   max_batches: 8
   packing: true
+  batch_size: 3
 """,
         encoding="utf-8",
     )
@@ -172,6 +228,7 @@ evaluation:
     config = load_config(config_path)
 
     assert config.evaluation.packing is True
+    assert config.evaluation.batch_size == 3
 
 
 def test_config_accepts_uncapped_evaluation(tmp_path) -> None:

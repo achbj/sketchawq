@@ -57,9 +57,11 @@ def test_run_summary_includes_global_storage_estimates() -> None:
     assert row["calibration_dataset"] == config.calibration.dataset_name
     assert row["calibration_samples"] == config.calibration.num_samples
     assert row["calibration_sequence_length"] == config.calibration.sequence_length
+    assert row["calibration_batch_size"] == config.calibration.batch_size
     assert row["evaluation_dataset"] == config.evaluation.dataset_name
     assert row["evaluation_samples"] == config.evaluation.num_samples
     assert row["evaluation_sequence_length"] == config.evaluation.sequence_length
+    assert row["evaluation_batch_size"] == config.evaluation.batch_size
     assert row["collect_stats_seconds"] == 0.4
     assert row["stats_batches"] == 2
     assert row["stats_tokens"] == 4096

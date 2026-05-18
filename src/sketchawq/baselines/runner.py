@@ -237,12 +237,18 @@ def build_baseline_run_summary_row(
         "calibration_samples": config.calibration.num_samples,
         "calibration_sequence_length": config.calibration.sequence_length,
         "calibration_packing": config.calibration.packing,
+        "calibration_batch_size": config.method.calibration_batch_size,
         "evaluation_source": config.evaluation.source,
         "evaluation_dataset": config.evaluation.dataset_name,
         "evaluation_split": config.evaluation.split,
         "evaluation_samples": config.evaluation.num_samples,
         "evaluation_sequence_length": config.evaluation.sequence_length,
         "evaluation_packing": config.evaluation.packing,
+        "evaluation_batch_size": (
+            config.calibration.batch_size
+            if config.evaluation.use_calibration_data
+            else config.evaluation.batch_size
+        ),
         "sequence_length": config.calibration.sequence_length,
         "num_layers": quant.get("num_layers"),
         "quantization_seconds": quant.get("elapsed_seconds"),
@@ -584,10 +590,14 @@ def _make_llmcompressor_calibration_dataset(
     batches = make_calibration_batches(tokenizer, config.calibration, device=torch.device("cpu"))
     columns: dict[str, list[list[int]]] = {"input_ids": [], "attention_mask": []}
     for batch in batches:
-        columns["input_ids"].append(batch.input_ids.squeeze(0).to(dtype=torch.long).tolist())
-        columns["attention_mask"].append(
-            batch.attention_mask.squeeze(0).to(dtype=torch.long).tolist()
-        )
+        input_ids = batch.input_ids.to(dtype=torch.long, device="cpu")
+        attention_mask = batch.attention_mask.to(dtype=torch.long, device="cpu")
+        if input_ids.ndim == 1:
+            input_ids = input_ids.unsqueeze(0)
+            attention_mask = attention_mask.unsqueeze(0)
+        for row_ids, row_mask in zip(input_ids, attention_mask, strict=True):
+            columns["input_ids"].append(row_ids.tolist())
+            columns["attention_mask"].append(row_mask.tolist())
     return Dataset.from_dict(columns)
 
 

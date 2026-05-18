@@ -60,12 +60,14 @@ RUN_SUMMARY_FIELDS = [
     "calibration_samples",
     "calibration_sequence_length",
     "calibration_packing",
+    "calibration_batch_size",
     "evaluation_source",
     "evaluation_dataset",
     "evaluation_split",
     "evaluation_samples",
     "evaluation_sequence_length",
     "evaluation_packing",
+    "evaluation_batch_size",
     "sequence_length",
     "num_layers",
     "quantization_seconds",
@@ -255,12 +257,18 @@ def build_run_summary_row(report: dict[str, Any], config: SketchAWQConfig) -> di
         "calibration_samples": config.calibration.num_samples,
         "calibration_sequence_length": config.calibration.sequence_length,
         "calibration_packing": config.calibration.packing,
+        "calibration_batch_size": config.calibration.batch_size,
         "evaluation_source": config.evaluation.source,
         "evaluation_dataset": config.evaluation.dataset_name,
         "evaluation_split": config.evaluation.split,
         "evaluation_samples": config.evaluation.num_samples,
         "evaluation_sequence_length": config.evaluation.sequence_length,
         "evaluation_packing": config.evaluation.packing,
+        "evaluation_batch_size": (
+            config.calibration.batch_size
+            if config.evaluation.use_calibration_data
+            else config.evaluation.batch_size
+        ),
         "sequence_length": config.calibration.sequence_length,
         "num_layers": quant.get("num_layers"),
         "quantization_seconds": quant.get("elapsed_seconds"),

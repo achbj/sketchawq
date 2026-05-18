@@ -41,6 +41,7 @@ class TextBatchConfig:
     sequence_length: int
     seed: int
     packing: bool
+    batch_size: int = 1
 
     @classmethod
     def from_calibration(cls, config: CalibrationConfig) -> TextBatchConfig:
@@ -54,6 +55,7 @@ class TextBatchConfig:
             sequence_length=config.sequence_length,
             seed=config.seed,
             packing=config.packing,
+            batch_size=config.batch_size,
         )
 
     @classmethod
@@ -68,6 +70,7 @@ class TextBatchConfig:
             sequence_length=config.sequence_length,
             seed=seed,
             packing=config.packing,
+            batch_size=config.batch_size,
         )
 
 
@@ -124,12 +127,12 @@ def make_text_batches(
         else list(islice(_iter_texts(config), config.num_samples))
     )
     batches: list[CalibrationBatch] = []
-    batch_size = 8
+    batch_size = _validated_batch_size(config.batch_size)
 
     for i in range(0, len(texts), batch_size):
         text_batch = texts[i:i + batch_size]
         encoded = tokenizer(
-            text_batch,
+            text_batch[0] if len(text_batch) == 1 else text_batch,
             max_length=config.sequence_length,
             truncation=True,
             padding="max_length",
@@ -159,7 +162,7 @@ def _make_packed_text_batches(
         )
 
     batches: list[CalibrationBatch] = []
-    batch_size = 8  # Group into batches of 8 to fully utilize GPU compute
+    batch_size = _validated_batch_size(config.batch_size)
     for i in range(0, len(selected_chunks), batch_size):
         chunk_batch = selected_chunks[i:i + batch_size]
         input_ids = torch.tensor(chunk_batch, dtype=torch.long, device=device)
@@ -223,6 +226,13 @@ def _separator_token_id(tokenizer) -> int | None:
         if token_id is not None:
             return int(token_id)
     return None
+
+
+def _validated_batch_size(batch_size: int) -> int:
+    batch_size = int(batch_size)
+    if batch_size <= 0:
+        raise ValueError("text batch_size must be positive")
+    return batch_size
 
 
 def iter_model_kwargs(batches: Iterable[CalibrationBatch]) -> Iterable[dict[str, torch.Tensor]]:
