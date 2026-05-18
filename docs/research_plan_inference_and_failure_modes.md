@@ -267,9 +267,33 @@ For each model and bit-width:
 
 ### Step 1 - Add Inference Benchmark Skeleton
 
-- Add a benchmark command or script that can run FP16 and dense simulated SketchAWQ first.
-- Record prompt length, generated tokens, batch size, GPU, and runtime format.
-- Do not claim packed speed yet.
+- [x] Add a benchmark command or script that can run FP16 and dense simulated SketchAWQ first.
+- [x] Record prompt length, generated tokens, batch size, GPU, and runtime format.
+- [ ] Run the first A100 Qwen3-4B FP16 and SketchAWQ dense-simulation matrix.
+- [ ] Add GPTQ backend benchmarking once saved/loadable GPTQ model handling is settled.
+- [ ] Do not claim packed speed yet.
+
+Canonical command shape:
+
+```bash
+sketchawq inference configs/paper/qwen3_4b_4bit.yaml \
+  --variant fp16 \
+  --prompt-lengths 128 512 2048 \
+  --batch-sizes 1 4 \
+  --generated-tokens 128 \
+  --output-root artifacts/inference
+```
+
+For dense simulated SketchAWQ, use:
+
+```bash
+sketchawq inference configs/paper/qwen3_4b_4bit.yaml \
+  --variant sketchawq-dense \
+  --prompt-lengths 128 512 2048 \
+  --batch-sizes 1 4 \
+  --generated-tokens 128 \
+  --output-root artifacts/inference
+```
 
 ### Step 2 - Add Experiment Ledger Discipline
 

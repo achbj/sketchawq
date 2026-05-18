@@ -352,6 +352,33 @@ Next action:
 
 ## Backlog Of Experiments To Add
 
+### 2026-05-18 - Inference Benchmark Harness Added
+
+Status:
+- Done.
+
+Change:
+- Added `sketchawq inference`.
+- Added a reusable generation benchmark that reports prefill, decode, and total generate throughput.
+- Added runtime-format fields so dense simulation cannot be confused with packed int4/int3 inference.
+
+Current supported variants:
+- `fp16`
+- `sketchawq-dense`
+
+Output files:
+- per-run `inference_report.json`
+- per-run `inference_metrics.json`
+- per-run `inference_metrics.csv`
+- appendable global `artifacts/inference/inference_metrics.csv`
+
+Decision:
+- This is now the canonical harness for inference measurements.
+- The first real run should be Qwen3-4B FP16 on A100, then Qwen3-4B SketchAWQ dense simulation.
+
+Next action:
+- Run the first A100 inference matrix with prompt lengths 128/512/2048, generated tokens 128, and batch sizes 1/4.
+
 ### Inference
 
 - FP16 generate benchmark for Qwen3-4B on A100.

@@ -39,6 +39,25 @@ def build_parser() -> argparse.ArgumentParser:
     _add_runtime_options(baseline_parser)
     baseline_parser.set_defaults(handler=_handle_baseline)
 
+    inference_parser = subparsers.add_parser(
+        "inference",
+        help="Benchmark generation inference throughput for a SketchAWQ config",
+    )
+    inference_parser.add_argument("config", help="SketchAWQ YAML config")
+    inference_parser.add_argument(
+        "--variant",
+        choices=["fp16", "sketchawq-dense", "sketchawq_dense"],
+        default="fp16",
+        help="Model/runtime variant to benchmark",
+    )
+    inference_parser.add_argument("--prompt-lengths", type=int, nargs="+", default=[128, 512, 2048])
+    inference_parser.add_argument("--batch-sizes", type=int, nargs="+", default=[1])
+    inference_parser.add_argument("--generated-tokens", type=int, default=128)
+    inference_parser.add_argument("--warmup-runs", type=int, default=1)
+    inference_parser.add_argument("--seed-text", default="SketchAWQ inference benchmark prompt.")
+    _add_runtime_options(inference_parser)
+    inference_parser.set_defaults(handler=_handle_inference)
+
     return parser
 
 
@@ -74,6 +93,27 @@ def _handle_baseline(args: argparse.Namespace) -> int:
         output_root=args.output_root,
     )
     _print_reports(reports, as_json=args.json)
+    return 0
+
+
+def _handle_inference(args: argparse.Namespace) -> int:
+    from sketchawq.experiments.benchmark_inference import benchmark_from_config
+
+    report = benchmark_from_config(
+        args.config,
+        variant=args.variant,
+        prompt_lengths=args.prompt_lengths,
+        batch_sizes=args.batch_sizes,
+        generated_tokens=args.generated_tokens,
+        warmup_runs=args.warmup_runs,
+        model_cache_dir=args.model_cache_dir,
+        output_root=args.output_root or "artifacts/inference",
+        seed_text=args.seed_text,
+    )
+    if args.json:
+        print(json.dumps(report, indent=2))
+    else:
+        print(f"completed: {Path(str(report['output_dir'])).name}")
     return 0
 
 
