@@ -271,7 +271,7 @@ For each model and bit-width:
 - [x] Record prompt length, generated tokens, batch size, GPU, and runtime format.
 - [x] Run the first A100 Qwen3-4B FP16 and SketchAWQ dense-simulation matrix.
 - [x] Add repeat-aware inference measurements and a median/min/max summary board.
-- [ ] Repeat the FP16/dense matrix with more warmup or repeated measurements before making final speed claims.
+- [x] Repeat the FP16/dense matrix with repeated measurements before making final speed claims.
 - [ ] Add GPTQ backend benchmarking once saved/loadable GPTQ model handling is settled.
 - [ ] Do not claim packed speed yet.
 

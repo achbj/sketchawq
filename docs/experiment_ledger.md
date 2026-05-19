@@ -472,6 +472,64 @@ Next action:
 - Compare FP16 repeat spread first. If FP16 is stable, compare dense SketchAWQ ratios.
 - Then either add GPTQ backend inference or begin the int4 packed SketchAWQ backend/export path.
 
+### 2026-05-19 09:42 UTC - Qwen3-4B A100 Repeat-3 Inference Matrix
+
+Status:
+- Done, but not a packed-inference claim.
+
+Artifacts:
+- `artifacts/modal/inference/inference/qwen3_4b_4bit_qwen_gptq_fair_balanced_packed_eval2048_fp16_inference_20260519_094259`
+- `artifacts/modal/inference/inference/qwen3_4b_4bit_qwen_gptq_fair_balanced_packed_eval2048_sketchawq_dense_inference_20260519_094411`
+- `artifacts/modal/inference/inference/qwen3_4b_3bit_qwen_gptq_fair_balanced_packed_eval2048_fp16_inference_20260519_094434`
+- `artifacts/modal/inference/inference/qwen3_4b_3bit_qwen_gptq_fair_balanced_packed_eval2048_sketchawq_dense_inference_20260519_094506`
+- Summary board: `artifacts/inference_summary/qwen3_4b_a100_repeat3_20260519.csv`
+- HTML board: `artifacts/inference_summary/qwen3_4b_a100_repeat3_20260519.html`
+
+Setup:
+- Model: `Qwen/Qwen3-4B`
+- GPU: `NVIDIA A100-SXM4-40GB`
+- Torch/CUDA: `torch 2.12.0+cu130`, CUDA `13.0`
+- Prompt lengths: 128, 512, 2048
+- Batch sizes: 1, 4
+- Generated tokens: 128
+- Warmup runs: 1
+- Measured repeats per shape: 3
+- Runtime formats: `fp16`, `sketchawq_dense_dequantized`
+
+Key result at prompt 2048, batch 4:
+
+| Bits | Variant | Generate tok/s median | Generate min-max | Decode tok/s median | Ratio vs FP16 | Quant time |
+| ---: | --- | ---: | --- | ---: | ---: | ---: |
+| 3 | FP16 | 1249.6 | 1228.3-1253.5 | 78.98 | 1.000x | n/a |
+| 3 | SketchAWQ dense | 1703.2 | 1692.1-1729.9 | 110.11 | 1.363x | 57.11s |
+| 4 | FP16 | 1210.6 | 1163.5-1216.1 | 76.51 | 1.000x | n/a |
+| 4 | SketchAWQ dense | 1143.3 | 1138.7-1149.4 | 71.88 | 0.944x | 64.81s |
+
+Median dense-vs-FP16 ratios across all prompt/batch shapes:
+
+| Bits | Prefill ratio | Decode ratio | Generate ratio |
+| ---: | ---: | ---: | ---: |
+| 3 | 1.322x | 1.459x | 1.456x |
+| 4 | 0.999x | 0.970x | 0.969x |
+
+Sanity check:
+- The two FP16 config runs are now stable: 3-bit-config FP16 vs 4-bit-config FP16 generate throughput ranges from `0.987x` to `1.032x`, median `1.006x`.
+- This is a major improvement over the first one-shot matrix, where FP16-to-FP16 drift was too large for speed claims.
+
+Interpretation:
+- The 4-bit dense result behaves as expected: approximately FP16, slightly slower at longer contexts.
+- The 3-bit dense result is surprisingly faster than FP16 even though it is still dense dequantized simulation. Treat this as a real measured phenomenon in this run, but not yet an inference-backend result.
+- Possible explanations to test: run-order/cache effects, generated-token path differences, kernel/autotune state, or quantized-weight value distributions affecting model execution indirectly.
+
+Decision:
+- Do not claim packed speed yet.
+- Do not treat 3-bit dense speedup as a core contribution until it survives order-controlled reruns.
+- The immediate next inference experiment should isolate whether 3-bit dense speedup is reproducible and causal.
+
+Next action:
+- Run order-controlled repeat matrix: FP16 3-bit config again after all dense runs, then 3-bit dense again with the same prompt/batch matrix.
+- Add GPTQ inference backend only after the dense-vs-FP16 behavior is understood well enough to make comparison meaningful.
+
 ### Inference
 
 - FP16 generate benchmark for Qwen3-4B on A100.
