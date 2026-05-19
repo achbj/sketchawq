@@ -25,6 +25,7 @@ Options:
   --batch-sizes LIST              Comma/space list. Default: 1,4
   --generated-tokens N            Tokens to decode. Default: 128
   --warmup-runs N                 Warmup runs per shape. Default: 1
+  --repeats N                     Measured repeats per shape. Default: 3
   --output-root PATH              Output root. Default: /artifacts/inference on Modal, artifacts/inference locally
   --name NAME                     Optional fixed run directory name
   --dry-run                       Print command without running it
@@ -135,6 +136,7 @@ run_command() {
       --batch-sizes "$batch_sizes"
       --generated-tokens "$generated_tokens"
       --warmup-runs "$warmup_runs"
+      --repeats "$repeats"
       --output-root "$output_root_arg"
     )
     if [[ -n "$name" ]]; then
@@ -159,8 +161,12 @@ run_command() {
     command+=(
       --generated-tokens "$generated_tokens"
       --warmup-runs "$warmup_runs"
+      --repeats "$repeats"
       --output-root "$output_root_arg"
     )
+    if [[ -n "$name" ]]; then
+      command+=(--name "$name")
+    fi
   else
     die "--backend must be modal or local"
   fi
@@ -194,6 +200,7 @@ prompt_lengths="128,512,2048"
 batch_sizes="1,4"
 generated_tokens="128"
 warmup_runs="1"
+repeats="3"
 output_root=""
 name=""
 
@@ -242,6 +249,12 @@ while [[ $# -gt 0 ]]; do
       [[ $# -ge 2 ]] || die "--warmup-runs requires a value"
       [[ "$2" =~ ^[0-9]+$ ]] || die "--warmup-runs must be an integer"
       warmup_runs="$2"
+      shift 2
+      ;;
+    --repeats)
+      [[ $# -ge 2 ]] || die "--repeats requires a value"
+      [[ "$2" =~ ^[1-9][0-9]*$ ]] || die "--repeats must be a positive integer"
+      repeats="$2"
       shift 2
       ;;
     --output-root)

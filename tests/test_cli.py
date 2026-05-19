@@ -46,6 +46,8 @@ def test_inference_command_delegates_to_benchmark(monkeypatch, tmp_path, capsys)
             "4",
             "--warmup-runs",
             "0",
+            "--repeats",
+            "2",
             "--output-root",
             str(tmp_path),
         ]
@@ -57,4 +59,43 @@ def test_inference_command_delegates_to_benchmark(monkeypatch, tmp_path, capsys)
     assert captured["batch_sizes"] == [1, 2]
     assert captured["generated_tokens"] == 4
     assert captured["warmup_runs"] == 0
+    assert captured["repeats"] == 2
     assert "completed: tiny_inference" in capsys.readouterr().out
+
+
+def test_inference_summary_command_delegates(monkeypatch, tmp_path, capsys) -> None:
+    captured = {}
+
+    def fake_summarize(inputs, **kwargs):
+        captured["inputs"] = inputs
+        captured.update(kwargs)
+        return {
+            "csv": str(tmp_path / "summary.csv"),
+            "json": str(tmp_path / "summary.json"),
+            "html": str(tmp_path / "summary.html"),
+        }
+
+    monkeypatch.setattr(
+        "sketchawq.experiments.summarize_inference.summarize_inference_artifacts",
+        fake_summarize,
+    )
+
+    exit_code = main(
+        [
+            "inference-summary",
+            "artifacts/modal/inference/inference",
+            "--output-dir",
+            str(tmp_path),
+            "--name",
+            "qwen3_4b_a100",
+            "--model",
+            "Qwen/Qwen3-4B",
+        ]
+    )
+
+    assert exit_code == 0
+    assert captured["inputs"] == ["artifacts/modal/inference/inference"]
+    assert captured["output_dir"] == str(tmp_path)
+    assert captured["name"] == "qwen3_4b_a100"
+    assert captured["model"] == "Qwen/Qwen3-4B"
+    assert "summary.csv" in capsys.readouterr().out

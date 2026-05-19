@@ -3,6 +3,7 @@ from __future__ import annotations
 import csv
 import inspect
 import json
+import statistics
 import time
 from dataclasses import dataclass
 from pathlib import Path
@@ -23,8 +24,14 @@ INFERENCE_METRIC_FIELDS = [
     "group_size",
     "inference_backend",
     "weight_runtime_format",
+    "measurement_kind",
+    "repeat_index",
+    "repeats",
     "prompt_length",
+    "prompt_tokens",
     "generated_tokens",
+    "decode_tokens",
+    "total_tokens",
     "batch_size",
     "warmup_runs",
     "prefill_seconds",
@@ -34,6 +41,30 @@ INFERENCE_METRIC_FIELDS = [
     "prefill_tokens_per_second",
     "decode_tokens_per_second",
     "generate_tokens_per_second",
+    "prefill_seconds_min",
+    "prefill_seconds_median",
+    "prefill_seconds_max",
+    "decode_seconds_min",
+    "decode_seconds_median",
+    "decode_seconds_max",
+    "generate_seconds_min",
+    "generate_seconds_median",
+    "generate_seconds_max",
+    "time_to_first_token_ms_min",
+    "time_to_first_token_ms_median",
+    "time_to_first_token_ms_max",
+    "prefill_tokens_per_second_min",
+    "prefill_tokens_per_second_median",
+    "prefill_tokens_per_second_max",
+    "decode_tokens_per_second_min",
+    "decode_tokens_per_second_median",
+    "decode_tokens_per_second_max",
+    "generate_tokens_per_second_min",
+    "generate_tokens_per_second_median",
+    "generate_tokens_per_second_max",
+    "peak_memory_mb_min",
+    "peak_memory_mb_median",
+    "peak_memory_mb_max",
     "peak_memory_mb",
     "device",
     "cuda_available",
@@ -80,11 +111,38 @@ def benchmark_generation(
     device: torch.device,
     warmup_runs: int = 1,
     seed_text: str = "SketchAWQ inference benchmark prompt.",
-) -> dict[str, float | int | None]:
+) -> dict[str, Any]:
+    return benchmark_generation_repeated(
+        model,
+        tokenizer,
+        prompt_length=prompt_length,
+        generated_tokens=generated_tokens,
+        batch_size=batch_size,
+        device=device,
+        warmup_runs=warmup_runs,
+        repeats=1,
+        seed_text=seed_text,
+    )[0]
+
+
+def benchmark_generation_repeated(
+    model: torch.nn.Module,
+    tokenizer: Any,
+    *,
+    prompt_length: int,
+    generated_tokens: int,
+    batch_size: int,
+    device: torch.device,
+    warmup_runs: int = 1,
+    repeats: int = 1,
+    seed_text: str = "SketchAWQ inference benchmark prompt.",
+) -> list[dict[str, Any]]:
     if generated_tokens <= 0:
         raise ValueError("generated_tokens must be positive")
     if warmup_runs < 0:
         raise ValueError("warmup_runs must be non-negative")
+    if repeats <= 0:
+        raise ValueError("repeats must be positive")
 
     model.eval()
     prompt = make_prompt_batch(
@@ -95,25 +153,94 @@ def benchmark_generation(
         seed_text=seed_text,
     )
 
+    samples: list[dict[str, Any]] = []
     with torch.inference_mode():
         for _ in range(warmup_runs):
             _run_generation_once(model, prompt, generated_tokens=generated_tokens, device=device)
 
-        if device.type == "cuda":
-            torch.cuda.reset_peak_memory_stats(device)
-            torch.cuda.synchronize(device)
-        result = _run_generation_once(
-            model,
-            prompt,
-            generated_tokens=generated_tokens,
-            device=device,
-        )
-        if device.type == "cuda":
-            torch.cuda.synchronize(device)
-            peak_memory_mb = torch.cuda.max_memory_allocated(device) / 1_000_000
-        else:
-            peak_memory_mb = None
+        for repeat_index in range(1, repeats + 1):
+            if device.type == "cuda":
+                torch.cuda.reset_peak_memory_stats(device)
+                torch.cuda.synchronize(device)
+            result = _run_generation_once(
+                model,
+                prompt,
+                generated_tokens=generated_tokens,
+                device=device,
+            )
+            if device.type == "cuda":
+                torch.cuda.synchronize(device)
+                peak_memory_mb = torch.cuda.max_memory_allocated(device) / 1_000_000
+            else:
+                peak_memory_mb = None
+            metrics = _build_generation_metrics(
+                result,
+                prompt=prompt,
+                generated_tokens=generated_tokens,
+                batch_size=batch_size,
+                warmup_runs=warmup_runs,
+                peak_memory_mb=peak_memory_mb,
+            )
+            metrics["measurement_kind"] = "sample"
+            metrics["repeat_index"] = repeat_index
+            metrics["repeats"] = repeats
+            samples.append(metrics)
 
+    return samples
+
+
+def summarize_generation_metrics(samples: list[dict[str, Any]]) -> dict[str, Any]:
+    if not samples:
+        raise ValueError("samples must be non-empty")
+
+    first = samples[0]
+    summary: dict[str, Any] = {
+        "measurement_kind": "summary",
+        "repeat_index": "",
+        "repeats": len(samples),
+        "prompt_length": first.get("prompt_length"),
+        "prompt_tokens": first.get("prompt_tokens"),
+        "generated_tokens": first.get("generated_tokens"),
+        "decode_tokens": first.get("decode_tokens"),
+        "total_tokens": first.get("total_tokens"),
+        "batch_size": first.get("batch_size"),
+        "warmup_runs": first.get("warmup_runs"),
+    }
+    for field in (
+        "prefill_seconds",
+        "decode_seconds",
+        "generate_seconds",
+        "time_to_first_token_ms",
+        "prefill_tokens_per_second",
+        "decode_tokens_per_second",
+        "generate_tokens_per_second",
+        "peak_memory_mb",
+    ):
+        values = _numeric_values(samples, field)
+        if not values:
+            summary[field] = None
+            summary[f"{field}_min"] = None
+            summary[f"{field}_median"] = None
+            summary[f"{field}_max"] = None
+            continue
+        median_value = float(statistics.median(values))
+        summary[field] = median_value
+        summary[f"{field}_min"] = min(values)
+        summary[f"{field}_median"] = median_value
+        summary[f"{field}_max"] = max(values)
+    return summary
+
+
+def _build_generation_metrics(
+    result: dict[str, float],
+    *,
+    prompt: PromptBatch,
+    generated_tokens: int,
+    batch_size: int,
+    warmup_runs: int,
+    peak_memory_mb: float | None,
+) -> dict[str, float | int | None]:
+    prompt_length = int(prompt.input_ids.shape[1])
     prefill_tokens = int(prompt.input_ids.numel())
     decode_tokens = int(batch_size * generated_tokens)
     total_tokens = prefill_tokens + decode_tokens
@@ -122,7 +249,10 @@ def benchmark_generation(
     generate_seconds = prefill_seconds + decode_seconds
     return {
         "prompt_length": prompt_length,
+        "prompt_tokens": prefill_tokens,
         "generated_tokens": generated_tokens,
+        "decode_tokens": decode_tokens,
+        "total_tokens": total_tokens,
         "batch_size": batch_size,
         "warmup_runs": warmup_runs,
         "prefill_seconds": prefill_seconds,
@@ -165,8 +295,14 @@ def build_inference_metric_row(
         "group_size": group_size,
         "inference_backend": inference_backend,
         "weight_runtime_format": weight_runtime_format,
+        "measurement_kind": metrics.get("measurement_kind", "sample"),
+        "repeat_index": metrics.get("repeat_index", ""),
+        "repeats": metrics.get("repeats", 1),
         "prompt_length": metrics.get("prompt_length"),
+        "prompt_tokens": metrics.get("prompt_tokens"),
         "generated_tokens": metrics.get("generated_tokens"),
+        "decode_tokens": metrics.get("decode_tokens"),
+        "total_tokens": metrics.get("total_tokens"),
         "batch_size": metrics.get("batch_size"),
         "warmup_runs": metrics.get("warmup_runs"),
         "prefill_seconds": metrics.get("prefill_seconds"),
@@ -176,6 +312,30 @@ def build_inference_metric_row(
         "prefill_tokens_per_second": metrics.get("prefill_tokens_per_second"),
         "decode_tokens_per_second": metrics.get("decode_tokens_per_second"),
         "generate_tokens_per_second": metrics.get("generate_tokens_per_second"),
+        "prefill_seconds_min": metrics.get("prefill_seconds_min"),
+        "prefill_seconds_median": metrics.get("prefill_seconds_median"),
+        "prefill_seconds_max": metrics.get("prefill_seconds_max"),
+        "decode_seconds_min": metrics.get("decode_seconds_min"),
+        "decode_seconds_median": metrics.get("decode_seconds_median"),
+        "decode_seconds_max": metrics.get("decode_seconds_max"),
+        "generate_seconds_min": metrics.get("generate_seconds_min"),
+        "generate_seconds_median": metrics.get("generate_seconds_median"),
+        "generate_seconds_max": metrics.get("generate_seconds_max"),
+        "time_to_first_token_ms_min": metrics.get("time_to_first_token_ms_min"),
+        "time_to_first_token_ms_median": metrics.get("time_to_first_token_ms_median"),
+        "time_to_first_token_ms_max": metrics.get("time_to_first_token_ms_max"),
+        "prefill_tokens_per_second_min": metrics.get("prefill_tokens_per_second_min"),
+        "prefill_tokens_per_second_median": metrics.get("prefill_tokens_per_second_median"),
+        "prefill_tokens_per_second_max": metrics.get("prefill_tokens_per_second_max"),
+        "decode_tokens_per_second_min": metrics.get("decode_tokens_per_second_min"),
+        "decode_tokens_per_second_median": metrics.get("decode_tokens_per_second_median"),
+        "decode_tokens_per_second_max": metrics.get("decode_tokens_per_second_max"),
+        "generate_tokens_per_second_min": metrics.get("generate_tokens_per_second_min"),
+        "generate_tokens_per_second_median": metrics.get("generate_tokens_per_second_median"),
+        "generate_tokens_per_second_max": metrics.get("generate_tokens_per_second_max"),
+        "peak_memory_mb_min": metrics.get("peak_memory_mb_min"),
+        "peak_memory_mb_median": metrics.get("peak_memory_mb_median"),
+        "peak_memory_mb_max": metrics.get("peak_memory_mb_max"),
         "peak_memory_mb": metrics.get("peak_memory_mb"),
         "device": str(device),
         "cuda_available": environment.get("cuda_available"),
@@ -313,6 +473,16 @@ def _safe_rate(count: int, seconds: float) -> float:
     if seconds <= 0:
         return 0.0
     return float(count) / float(seconds)
+
+
+def _numeric_values(rows: list[dict[str, Any]], field: str) -> list[float]:
+    values = []
+    for row in rows:
+        value = row.get(field)
+        if value is None or value == "":
+            continue
+        values.append(float(value))
+    return values
 
 
 def _synchronize(device: torch.device) -> None:

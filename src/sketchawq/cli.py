@@ -54,9 +54,25 @@ def build_parser() -> argparse.ArgumentParser:
     inference_parser.add_argument("--batch-sizes", type=int, nargs="+", default=[1])
     inference_parser.add_argument("--generated-tokens", type=int, default=128)
     inference_parser.add_argument("--warmup-runs", type=int, default=1)
+    inference_parser.add_argument("--repeats", type=int, default=1)
+    inference_parser.add_argument("--name", default=None)
     inference_parser.add_argument("--seed-text", default="SketchAWQ inference benchmark prompt.")
     _add_runtime_options(inference_parser)
     inference_parser.set_defaults(handler=_handle_inference)
+
+    inference_summary_parser = subparsers.add_parser(
+        "inference-summary",
+        help="Summarize repeated inference benchmark artifacts",
+    )
+    inference_summary_parser.add_argument(
+        "inputs",
+        nargs="+",
+        help="Inference artifact roots, run directories, or inference_metrics.csv files",
+    )
+    inference_summary_parser.add_argument("--output-dir", default="artifacts/inference_summary")
+    inference_summary_parser.add_argument("--name", default="inference_summary")
+    inference_summary_parser.add_argument("--model", default=None, help="Optional model repo id filter")
+    inference_summary_parser.set_defaults(handler=_handle_inference_summary)
 
     return parser
 
@@ -106,14 +122,30 @@ def _handle_inference(args: argparse.Namespace) -> int:
         batch_sizes=args.batch_sizes,
         generated_tokens=args.generated_tokens,
         warmup_runs=args.warmup_runs,
+        repeats=args.repeats,
         model_cache_dir=args.model_cache_dir,
         output_root=args.output_root or "artifacts/inference",
+        name=args.name,
         seed_text=args.seed_text,
     )
     if args.json:
         print(json.dumps(report, indent=2))
     else:
         print(f"completed: {Path(str(report['output_dir'])).name}")
+    return 0
+
+
+def _handle_inference_summary(args: argparse.Namespace) -> int:
+    from sketchawq.experiments.summarize_inference import summarize_inference_artifacts
+
+    outputs = summarize_inference_artifacts(
+        args.inputs,
+        output_dir=args.output_dir,
+        name=args.name,
+        model=args.model,
+    )
+    print(f"wrote: {outputs['csv']}")
+    print(f"wrote: {outputs['html']}")
     return 0
 
 

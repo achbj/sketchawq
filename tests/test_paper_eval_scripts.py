@@ -318,6 +318,8 @@ def test_inference_script_dry_runs_modal_a100() -> None:
             "1,4",
             "--generated-tokens",
             "16",
+            "--repeats",
+            "5",
             "--dry-run",
         ],
         cwd=PROJECT_ROOT,
@@ -332,6 +334,7 @@ def test_inference_script_dry_runs_modal_a100() -> None:
     assert "--prompt-lengths 128\\,512" in result.stdout
     assert "--batch-sizes 1\\,4" in result.stdout
     assert "--generated-tokens 16" in result.stdout
+    assert "--repeats 5" in result.stdout
 
 
 def test_inference_script_dry_runs_local() -> None:
@@ -360,6 +363,7 @@ def test_inference_script_dry_runs_local() -> None:
     assert "python -m sketchawq.cli inference configs/paper/qwen3_1_7b_3bit.yaml" in result.stdout
     assert "--prompt-lengths 16 32" in result.stdout
     assert "--batch-sizes 1" in result.stdout
+    assert "--repeats 3" in result.stdout
 
 
 def test_inference_script_rejects_gpu_override_for_local_backend() -> None:

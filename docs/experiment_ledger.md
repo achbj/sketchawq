@@ -1,6 +1,6 @@
 # SketchAWQ Experiment Ledger
 
-Last updated: 2026-05-18
+Last updated: 2026-05-19
 
 This is the detailed experiment record. The goal is to preserve every important run decision, not just the final pretty board.
 
@@ -431,6 +431,46 @@ Decision:
 Next action:
 - Repeat the inference benchmark with more warmup or repeated measurements and summarize median/min/max.
 - Then add a GPTQ backend inference row or move toward an int4 packed SketchAWQ backend/export path.
+
+### 2026-05-19 - Repeat-Aware Inference Benchmark Tooling
+
+Status:
+- Done, tooling only. New repeated A100 results still need to be run.
+
+Change:
+- Added measured repeats to inference benchmarking.
+- Each prompt/batch shape now warms up once and then records `N` measured sample rows.
+- When `repeats > 1`, each run also writes a per-shape summary row with median/min/max timing and throughput.
+- Added `measurement_kind`, `repeat_index`, `repeats`, `prompt_tokens`, `decode_tokens`, and `total_tokens` to inference metrics.
+- Added an inference summary board that reads per-run `inference_metrics.csv` files, ignores incomplete root aggregate CSVs by default, and writes median/min/max CSV, JSON, and HTML.
+- Updated the Modal inference entrypoint and `scripts/run_inference_eval.sh`; the helper script now defaults to `--repeats 3`.
+
+Commands:
+- Modal run shape:
+  `scripts/run_inference_eval.sh qwen3_4b 4 --variant fp16 --gpu A100 --repeats 3`
+- Dense SketchAWQ shape:
+  `scripts/run_inference_eval.sh qwen3_4b 4 --variant sketchawq-dense --gpu A100 --repeats 3`
+- Summary after download:
+  `PYTHONPATH=src python -m sketchawq.experiments.summarize_inference artifacts/modal/inference/inference --output-dir artifacts/inference_summary --name qwen3_4b_a100_repeat3`
+
+Validation:
+- Focused test suite passed:
+  `pytest tests/test_inference_benchmark.py tests/test_inference_summary.py tests/test_cli.py tests/test_paper_eval_scripts.py tests/test_modal_entrypoints.py`
+- Result: 44 passed.
+- Smoke-tested the summary builder on the first downloaded inference matrix.
+- Smoke output:
+  `artifacts/inference_summary/qwen3_4b_a100_first_matrix.csv`
+  `artifacts/inference_summary/qwen3_4b_a100_first_matrix.json`
+  `artifacts/inference_summary/qwen3_4b_a100_first_matrix.html`
+
+Decision:
+- Future inference claims should use the summary board medians, not single sample rows.
+- Keep dense simulation clearly labeled as `sketchawq_dense_dequantized`; it is still not packed int4/int3 inference.
+
+Next action:
+- Re-run the Qwen3-4B A100 inference matrix with `--repeats 3`.
+- Compare FP16 repeat spread first. If FP16 is stable, compare dense SketchAWQ ratios.
+- Then either add GPTQ backend inference or begin the int4 packed SketchAWQ backend/export path.
 
 ### Inference
 

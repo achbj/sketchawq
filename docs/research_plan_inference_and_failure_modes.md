@@ -270,6 +270,7 @@ For each model and bit-width:
 - [x] Add a benchmark command or script that can run FP16 and dense simulated SketchAWQ first.
 - [x] Record prompt length, generated tokens, batch size, GPU, and runtime format.
 - [x] Run the first A100 Qwen3-4B FP16 and SketchAWQ dense-simulation matrix.
+- [x] Add repeat-aware inference measurements and a median/min/max summary board.
 - [ ] Repeat the FP16/dense matrix with more warmup or repeated measurements before making final speed claims.
 - [ ] Add GPTQ backend benchmarking once saved/loadable GPTQ model handling is settled.
 - [ ] Do not claim packed speed yet.
@@ -282,6 +283,8 @@ sketchawq inference configs/paper/qwen3_4b_4bit.yaml \
   --prompt-lengths 128 512 2048 \
   --batch-sizes 1 4 \
   --generated-tokens 128 \
+  --warmup-runs 1 \
+  --repeats 3 \
   --output-root artifacts/inference
 ```
 
@@ -293,7 +296,27 @@ sketchawq inference configs/paper/qwen3_4b_4bit.yaml \
   --prompt-lengths 128 512 2048 \
   --batch-sizes 1 4 \
   --generated-tokens 128 \
+  --warmup-runs 1 \
+  --repeats 3 \
   --output-root artifacts/inference
+```
+
+Modal helper command:
+
+```bash
+scripts/run_inference_eval.sh qwen3_4b 4 \
+  --variant sketchawq-dense \
+  --gpu A100 \
+  --repeats 3
+```
+
+Summary command after sync/download:
+
+```bash
+PYTHONPATH=src python -m sketchawq.experiments.summarize_inference \
+  artifacts/modal/inference/inference \
+  --output-dir artifacts/inference_summary \
+  --name qwen3_4b_a100_repeat3
 ```
 
 ### Step 2 - Add Experiment Ledger Discipline

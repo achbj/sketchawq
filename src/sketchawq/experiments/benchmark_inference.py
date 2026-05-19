@@ -10,8 +10,9 @@ from uuid import uuid4
 from sketchawq.config import SketchAWQConfig, load_config
 from sketchawq.data.calibration import make_calibration_batches
 from sketchawq.eval.inference import (
-    benchmark_generation,
+    benchmark_generation_repeated,
     build_inference_metric_row,
+    summarize_generation_metrics,
     write_inference_metrics,
 )
 from sketchawq.logging_utils import configure_logging
@@ -29,6 +30,7 @@ def benchmark_from_config(
     batch_sizes: list[int] | None = None,
     generated_tokens: int = 128,
     warmup_runs: int = 1,
+    repeats: int = 1,
     model_cache_dir: str | Path | None = None,
     output_root: str | Path = "artifacts/inference",
     name: str | None = None,
@@ -41,6 +43,8 @@ def benchmark_from_config(
     prompt_lengths = prompt_lengths or [128, 512, 2048]
     batch_sizes = batch_sizes or [1]
     variant = _normalize_variant(variant)
+    if repeats <= 0:
+        raise ValueError("repeats must be positive")
 
     tokenizer, model = load_causal_lm(config.model, cache_dir=model_cache_dir, device=device)
     quantization_seconds: float | None = None
@@ -71,7 +75,7 @@ def benchmark_from_config(
     rows = []
     for prompt_length in prompt_lengths:
         for batch_size in batch_sizes:
-            metrics = benchmark_generation(
+            samples = benchmark_generation_repeated(
                 model,
                 tokenizer,
                 prompt_length=prompt_length,
@@ -79,25 +83,30 @@ def benchmark_from_config(
                 batch_size=batch_size,
                 device=device,
                 warmup_runs=warmup_runs,
+                repeats=repeats,
                 seed_text=seed_text,
             )
-            rows.append(
-                build_inference_metric_row(
-                    metrics,
-                    metadata=metadata,
-                    model_repo_id=config.model.repo_id,
-                    model_revision=config.model.revision,
-                    method=method,
-                    model_variant=variant,
-                    bits=bits,
-                    group_size=group_size,
-                    inference_backend="transformers_generate_loop",
-                    weight_runtime_format=weight_runtime_format,
-                    device=device,
-                    quantization_seconds=quantization_seconds,
-                    output_dir=output_dir,
+            shape_metrics = [*samples]
+            if repeats > 1:
+                shape_metrics.append(summarize_generation_metrics(samples))
+            for metrics in shape_metrics:
+                rows.append(
+                    build_inference_metric_row(
+                        metrics,
+                        metadata=metadata,
+                        model_repo_id=config.model.repo_id,
+                        model_revision=config.model.revision,
+                        method=method,
+                        model_variant=variant,
+                        bits=bits,
+                        group_size=group_size,
+                        inference_backend="transformers_generate_loop",
+                        weight_runtime_format=weight_runtime_format,
+                        device=device,
+                        quantization_seconds=quantization_seconds,
+                        output_dir=output_dir,
+                    )
                 )
-            )
 
     report = {
         "metadata": metadata,
@@ -132,6 +141,7 @@ def main() -> None:
     parser.add_argument("--batch-sizes", type=int, nargs="+", default=[1])
     parser.add_argument("--generated-tokens", type=int, default=128)
     parser.add_argument("--warmup-runs", type=int, default=1)
+    parser.add_argument("--repeats", type=int, default=1)
     parser.add_argument("--model-cache-dir", default=None)
     parser.add_argument("--output-root", default="artifacts/inference")
     parser.add_argument("--name", default=None)
@@ -145,6 +155,7 @@ def main() -> None:
         batch_sizes=args.batch_sizes,
         generated_tokens=args.generated_tokens,
         warmup_runs=args.warmup_runs,
+        repeats=args.repeats,
         model_cache_dir=args.model_cache_dir,
         output_root=args.output_root,
         name=args.name,
