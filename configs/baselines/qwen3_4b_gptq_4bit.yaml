@@ -11,7 +11,7 @@ model:
 
 quantization:
   bits: 4
-  group_size: 128
+  group_size: 16
   symmetric: true
 
 calibration:

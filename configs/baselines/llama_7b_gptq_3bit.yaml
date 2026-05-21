@@ -11,7 +11,7 @@ model:
 
 quantization:
   bits: 3
-  group_size: 128
+  group_size: 32
   symmetric: true
 
 calibration:
@@ -28,21 +28,21 @@ calibration:
 evaluation:
   enabled: true
   compare_original: true
-  benchmark_name: wikitext2_validation_unpacked_eval128
+  benchmark_name: wikitext2_validation_packed_eval2048
   use_calibration_data: false
   source: dataset
   dataset_name: wikitext
   dataset_config: wikitext-2-raw-v1
   split: validation
   text_column: text
-  num_samples: 128
-  sequence_length: 1024
-  packing: false
-  max_batches: 128
+  num_samples: null
+  sequence_length: 2048
+  packing: true
+  max_batches: null
   measure_throughput: true
 
 output:
-  run_name: llama_7b_gptq_3bit_packed_calib_unpacked_eval128
+  run_name: llama_7b_gptq_3bit_packed_calib_packed_eval2048
   output_dir: artifacts
   save_model: false
 

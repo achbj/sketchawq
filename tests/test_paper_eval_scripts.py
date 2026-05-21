@@ -177,6 +177,30 @@ def test_qwen3_1_7b_check_configs_use_1024_by_256_budget() -> None:
         assert baseline.output.run_name.endswith("eval1024")
 
 
+def test_llama_7b_configs_use_packed_full_eval() -> None:
+    for bits, (sketchawq_config, gptq_config) in {
+        3: PAPER_EVAL_CONFIGS[("llama_7b", 3)],
+        4: PAPER_EVAL_CONFIGS[("llama_7b", 4)],
+    }.items():
+        sketchawq = load_config(PROJECT_ROOT / sketchawq_config)
+        baseline = load_baseline_config(PROJECT_ROOT / gptq_config)
+
+        assert sketchawq.model.repo_id == baseline.model.repo_id == "meta-llama/Llama-2-7b-hf"
+        assert sketchawq.quantization.bits == baseline.quantization.bits == bits
+        assert sketchawq.calibration.dataset_name == baseline.calibration.dataset_name == "wikitext"
+        assert sketchawq.calibration.packing == baseline.calibration.packing is True
+        assert sketchawq.evaluation.benchmark_name == baseline.evaluation.benchmark_name
+        assert sketchawq.evaluation.benchmark_name == "wikitext2_validation_packed_eval2048"
+        assert sketchawq.evaluation.num_samples == baseline.evaluation.num_samples is None
+        assert sketchawq.evaluation.max_batches == baseline.evaluation.max_batches is None
+        assert sketchawq.evaluation.sequence_length == baseline.evaluation.sequence_length == 2048
+        assert sketchawq.evaluation.packing == baseline.evaluation.packing is True
+        assert sketchawq.evaluation.measure_throughput
+        assert baseline.evaluation.measure_throughput
+        assert sketchawq.output.run_name.endswith("packed_eval2048")
+        assert baseline.output.run_name.endswith("packed_eval2048")
+
+
 def test_mistral_7b_configs_use_official_base_model_and_full_eval() -> None:
     for bits, (sketchawq_config, gptq_config) in {
         3: PAPER_EVAL_CONFIGS[("mistral_7b", 3)],
