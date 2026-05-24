@@ -54,6 +54,7 @@ def test_run_summary_includes_global_storage_estimates() -> None:
     assert row["fp16_weight_mb"] == 40.0
     assert row["estimated_quantized_mb"] == 10.0
     assert row["estimated_compression_ratio"] == pytest.approx(4.0)
+    assert row["estimated_effective_bits_per_weight"] == pytest.approx(4.0)
     assert row["calibration_dataset"] == config.calibration.dataset_name
     assert row["calibration_samples"] == config.calibration.num_samples
     assert row["calibration_sequence_length"] == config.calibration.sequence_length
@@ -73,6 +74,31 @@ def test_run_summary_includes_global_storage_estimates() -> None:
     assert row["stats_accumulator_dtype"] == "float32"
     assert row["awq_min_scale"] == config.quantization.awq_min_scale
     assert row["awq_max_scale"] == config.quantization.awq_max_scale
+
+
+def test_layer_metrics_include_effective_bits_per_weight() -> None:
+    config = SketchAWQConfig()
+    report = {
+        "metadata": {
+            "run_id": "abc123",
+            "run_name": "layer_bpw_test",
+            "environment": {"gpu_name": "NVIDIA A100-SXM4-40GB"},
+        },
+        "quantization": {
+            "method": "SketchAWQ-v0",
+            "layers": [
+                {
+                    "name": "proj",
+                    "fp16_weight_mb": 8.0,
+                    "estimated_quantized_mb": 2.5,
+                }
+            ],
+        },
+    }
+
+    row = build_layer_metric_rows(report, config)[0]
+
+    assert row["estimated_effective_bits_per_weight"] == pytest.approx(5.0)
 
 
 def test_layer_metrics_keep_joint_search_score_separate_from_stage_scores() -> None:
