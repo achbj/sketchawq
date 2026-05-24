@@ -33,6 +33,7 @@ BOARD_FIELDS = [
     "fp16_weight_mb",
     "estimated_quantized_mb",
     "estimated_compression_ratio",
+    "estimated_effective_bits_per_weight",
     "calibration_source",
     "calibration_dataset",
     "calibration_split",
@@ -337,6 +338,7 @@ def _render_html(rows: list[dict[str, str]]) -> str:
           <th>FP16 Size</th>
           <th>Quantized Size</th>
           <th>Compression</th>
+          <th>Eff. bpw</th>
         </tr>
       </thead>
       <tbody>{table_rows}</tbody>
@@ -376,6 +378,7 @@ def _render_table_row(row: dict[str, str]) -> str:
         _format_size_mb(row.get("fp16_weight_mb")),
         _format_size_mb(row.get("estimated_quantized_mb")),
         _format_compression(row.get("estimated_compression_ratio")),
+        _format_float(row.get("estimated_effective_bits_per_weight"), digits=2),
     ]
     class_name = ' class="best"' if best else ""
     return f"<tr{class_name}>" + "".join(f"<td>{cell}</td>" for cell in cells) + "</tr>"
