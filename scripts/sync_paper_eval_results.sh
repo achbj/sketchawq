@@ -78,8 +78,9 @@ bits_to_list() {
     2) echo "2" ;;
     3) echo "3" ;;
     4) echo "4" ;;
+    8) echo "8" ;;
     both) echo "3 4" ;;
-    all) echo "2 3 4" ;;
+    all) echo "2 3 4 8" ;;
     *) die "unsupported bits selector '$1'" ;;
   esac
 }
@@ -89,8 +90,9 @@ bits_slug() {
     2) echo "2bit" ;;
     3) echo "3bit" ;;
     4) echo "4bit" ;;
+    8) echo "8bit" ;;
     both) echo "3_4bit" ;;
-    all) echo "2_3_4bit" ;;
+    all) echo "2_3_4_8bit" ;;
     *) die "unsupported bits selector '$1'" ;;
   esac
 }
