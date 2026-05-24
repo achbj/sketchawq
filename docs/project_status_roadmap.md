@@ -128,6 +128,9 @@ Decision rules:
 
 - [ ] First test safer calibration changes: mixed calibration text, more
       calibration samples, and matched final sequence length.
+- [ ] Track every accuracy rescue experiment against effective bpw so smaller
+      groups/protected channels cannot quietly turn W3/W4 rows into higher-bit
+      storage budgets.
 - [ ] Then test limited fixed-recipe objective checks for rows with small gaps,
       especially Qwen3-8B 4-bit and any future Qwen3-32B 4-bit row.
 - [ ] Keep each experiment narrow: one reason to run, one variable group, one
@@ -187,3 +190,24 @@ Decision:
 Next action:
 - Run or sync Qwen3-32B 3-bit and 4-bit rows for SketchAWQ and GPTQ, then add
   them to the Current Outcomes table.
+
+### 2026-05-24 - Accuracy Rescue Guardrails Started
+
+Status:
+- Done.
+
+Evidence:
+- Added `docs/accuracy_rescue_log.md` with baseline state, non-overfit rules,
+  promotion criteria, experiment ladder, commands, and revert notes.
+- Added effective-bpw reporting to run summaries, layer metrics, and benchmark
+  boards so quality improvements can be judged against storage budget.
+- Added 2-bit paper-eval configs/scripts as diagnostics, not as promoted
+  competitive rows.
+
+Decision:
+- Use Qwen3-4B as the development proxy, but promote only recipes that survive
+  confirmation on another dataset/seed and another model size or family.
+
+Next action:
+- Re-freeze Qwen3-4B 2/3/4-bit SketchAWQ and GPTQ rows, then use layer metrics
+  to choose the smallest possible 4-bit rescue experiment.

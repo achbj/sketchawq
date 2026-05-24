@@ -352,6 +352,44 @@ Next action:
 
 ## Backlog Of Experiments To Add
 
+### 2026-05-24 - Accuracy Rescue Guardrails
+
+Status:
+- Planned / tooling started.
+
+Git:
+- Branch: `main`
+- Base commit at log creation: `8d05aab`
+- Worktree: dirty; contains GPTQ paper-style setup, 2-bit diagnostics, and
+  effective-bpw reporting changes.
+
+Purpose:
+- Start the path toward near-lossless 4-bit and 3-bit quality close to current
+  4-bit without overfitting one final WikiText2 board or hiding extra storage in
+  protected channels and small groups.
+
+Guardrails:
+- Track `estimated_effective_bits_per_weight` with every SketchAWQ summary and
+  layer metric.
+- Promote only fixed recipes that hold under a confirmation board, not a single
+  tuned result.
+- Treat 2-bit as a diagnostic lane until a rotation/vector/codebook-style 2-bit
+  mechanism exists.
+
+Initial commands:
+- `scripts/run_paper_eval.sh qwen3_4b 2 --method both --gpu A100`
+- `scripts/run_paper_eval.sh qwen3_4b 3 --method both --gpu A100`
+- `scripts/run_paper_eval.sh qwen3_4b 4 --method both --gpu A100`
+- `scripts/sync_paper_eval_results.sh qwen3_4b all --method both`
+
+Decision:
+- Do not begin broad rescue grids until the Qwen3-4B fair 2/3/4 rows are
+  re-frozen under the same calibration/evaluation contract.
+
+Next action:
+- Build the layer failure map from `layer_metrics.csv` and select one narrow
+  budgeted W4 rescue experiment.
+
 ### 2026-05-18 - Inference Benchmark Harness Added
 
 Status:
