@@ -66,10 +66,9 @@ normalize_bits_selector() {
     2|2bit|2_bit) echo "2" ;;
     3|3bit|3_bit) echo "3" ;;
     4|4bit|4_bit) echo "4" ;;
-    8|8bit|8_bit) echo "8" ;;
     both|3_4|3and4) echo "both" ;;
     all|2_3_4|2and3and4|all_bits) echo "all" ;;
-    *) die "bits must be 2, 3, 4, 8, both, or all; got '$1'" ;;
+    *) die "bits must be 2, 3, 4, both, or all; got '$1'" ;;
   esac
 }
 
@@ -78,9 +77,8 @@ bits_to_list() {
     2) echo "2" ;;
     3) echo "3" ;;
     4) echo "4" ;;
-    8) echo "8" ;;
     both) echo "3 4" ;;
-    all) echo "2 3 4 8" ;;
+    all) echo "2 3 4" ;;
     *) die "unsupported bits selector '$1'" ;;
   esac
 }
@@ -90,9 +88,8 @@ bits_slug() {
     2) echo "2bit" ;;
     3) echo "3bit" ;;
     4) echo "4bit" ;;
-    8) echo "8bit" ;;
     both) echo "3_4bit" ;;
-    all) echo "2_3_4_8bit" ;;
+    all) echo "2_3_4bit" ;;
     *) die "unsupported bits selector '$1'" ;;
   esac
 }
@@ -115,7 +112,6 @@ sketchawq_config() {
     wikitext:qwen3_8b:2) echo "configs/paper/qwen3_8b_2bit.yaml" ;;
     wikitext:qwen3_8b:3) echo "configs/paper/qwen3_8b_3bit.yaml" ;;
     wikitext:qwen3_8b:4) echo "configs/paper/qwen3_8b_4bit.yaml" ;;
-    wikitext:qwen3_4b:8) echo "configs/paper/qwen3_4b_8bit.yaml" ;;
     wikitext:qwen3_14b:2) echo "configs/paper/qwen3_14b_2bit.yaml" ;;
     wikitext:qwen3_14b:3) echo "configs/paper/qwen3_14b_3bit.yaml" ;;
     wikitext:qwen3_14b:4) echo "configs/paper/qwen3_14b_4bit.yaml" ;;
