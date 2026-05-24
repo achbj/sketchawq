@@ -11,9 +11,10 @@ inside protected channels and tiny groups.
 Git state at log creation:
 
 - Branch: `main`
-- Base commit: `8d05aab`
-- Worktree: dirty; includes GPTQ paper-style setup, 2-bit diagnostic configs,
-  2-bit launcher support, and effective-bpw reporting.
+- Pre-guardrail anchor commit: `8d05aab`
+- Guardrail setup head: `af1e850`
+- Guardrail setup includes GPTQ paper-style setup, 2-bit diagnostic configs,
+  2-bit launcher support, accuracy-rescue docs, and effective-bpw reporting.
 - Important pre-existing untracked files: `configs/paper/*_v2.yaml`; these were
   already present before this rescue log and should be treated as separate
   experimental drafts.
@@ -120,4 +121,3 @@ If an idea is rejected, do not delete the artifact. Mark it rejected here and in
 `docs/experiment_ledger.md`, then either revert the small config/code change or
 create a new fixed config with a new run name. Avoid overwriting historical run
 names.
-

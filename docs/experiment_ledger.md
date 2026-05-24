@@ -359,9 +359,10 @@ Status:
 
 Git:
 - Branch: `main`
-- Base commit at log creation: `8d05aab`
-- Worktree: dirty; contains GPTQ paper-style setup, 2-bit diagnostics, and
-  effective-bpw reporting changes.
+- Pre-guardrail anchor commit: `8d05aab`
+- Guardrail setup head: `af1e850`
+- Setup contains GPTQ paper-style setup, 2-bit diagnostics, accuracy-rescue
+  docs, and effective-bpw reporting changes.
 
 Purpose:
 - Start the path toward near-lossless 4-bit and 3-bit quality close to current
