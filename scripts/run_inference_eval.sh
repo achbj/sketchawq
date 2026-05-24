@@ -3,7 +3,7 @@ set -euo pipefail
 
 usage() {
   cat >&2 <<'USAGE'
-Usage: scripts/run_inference_eval.sh <model> <3|4> [options]
+Usage: scripts/run_inference_eval.sh <model> <2|3|4> [options]
 
 Models:
   qwen2_5_1_5b
@@ -60,28 +60,37 @@ normalize_model() {
 
 normalize_bits() {
   case "${1//-/_}" in
+    2|2bit|2_bit) echo "2" ;;
     3|3bit|3_bit) echo "3" ;;
     4|4bit|4_bit) echo "4" ;;
-    *) die "bits must be 3 or 4; got '$1'" ;;
+    *) die "bits must be 2, 3, or 4; got '$1'" ;;
   esac
 }
 
 sketchawq_config() {
   case "$1:$2" in
+    qwen2_5_1_5b:2) echo "configs/paper/qwen2_5_1_5b_2bit.yaml" ;;
     qwen2_5_1_5b:3) echo "configs/paper/qwen2_5_1_5b_3bit.yaml" ;;
     qwen2_5_1_5b:4) echo "configs/paper/qwen2_5_1_5b_4bit.yaml" ;;
+    qwen3_1_7b:2) echo "configs/paper/qwen3_1_7b_2bit.yaml" ;;
     qwen3_1_7b:3) echo "configs/paper/qwen3_1_7b_3bit.yaml" ;;
     qwen3_1_7b:4) echo "configs/paper/qwen3_1_7b_4bit.yaml" ;;
+    qwen3_4b:2) echo "configs/paper/qwen3_4b_2bit.yaml" ;;
     qwen3_4b:3) echo "configs/paper/qwen3_4b_3bit.yaml" ;;
     qwen3_4b:4) echo "configs/paper/qwen3_4b_4bit.yaml" ;;
+    qwen3_8b:2) echo "configs/paper/qwen3_8b_2bit.yaml" ;;
     qwen3_8b:3) echo "configs/paper/qwen3_8b_3bit.yaml" ;;
     qwen3_8b:4) echo "configs/paper/qwen3_8b_4bit.yaml" ;;
+    qwen3_14b:2) echo "configs/paper/qwen3_14b_2bit.yaml" ;;
     qwen3_14b:3) echo "configs/paper/qwen3_14b_3bit.yaml" ;;
     qwen3_14b:4) echo "configs/paper/qwen3_14b_4bit.yaml" ;;
+    qwen3_32b:2) echo "configs/paper/qwen3_32b_2bit.yaml" ;;
     qwen3_32b:3) echo "configs/paper/qwen3_32b_3bit.yaml" ;;
     qwen3_32b:4) echo "configs/paper/qwen3_32b_4bit.yaml" ;;
+    llama_7b:2) echo "configs/paper/llama_7b_2bit.yaml" ;;
     llama_7b:3) echo "configs/paper/llama_7b_3bit.yaml" ;;
     llama_7b:4) echo "configs/paper/llama_7b_4bit.yaml" ;;
+    mistral_7b:2) echo "configs/paper/mistral_7b_2bit.yaml" ;;
     mistral_7b:3) echo "configs/paper/mistral_7b_3bit.yaml" ;;
     mistral_7b:4) echo "configs/paper/mistral_7b_4bit.yaml" ;;
     *) die "no SketchAWQ config for $1 $2-bit" ;;

@@ -6,11 +6,11 @@ model:
 
 quantization:
   bits: 4
-  group_size: 16
+  group_size: 128
   symmetric: true
   scale_clip_search: greedy
   search_objective: hybrid
-  output_error_rows: 16
+  output_error_rows: 32
   output_error_weight: 0.5
   hessian_error_weight: 1.0
   awq_scale_normalization: geometric_mean

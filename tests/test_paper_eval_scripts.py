@@ -12,6 +12,10 @@ from sketchawq.config import load_config
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 
 PAPER_EVAL_CONFIGS = {
+    ("qwen2_5_1_5b", 2): (
+        "configs/paper/qwen2_5_1_5b_2bit.yaml",
+        "configs/baselines/qwen2_5_1_5b_gptq_2bit.yaml",
+    ),
     ("qwen2_5_1_5b", 3): (
         "configs/paper/qwen2_5_1_5b_3bit.yaml",
         "configs/baselines/qwen2_5_1_5b_gptq_3bit.yaml",
@@ -19,6 +23,10 @@ PAPER_EVAL_CONFIGS = {
     ("qwen2_5_1_5b", 4): (
         "configs/paper/qwen2_5_1_5b_4bit.yaml",
         "configs/baselines/qwen2_5_1_5b_gptq_4bit.yaml",
+    ),
+    ("qwen3_1_7b", 2): (
+        "configs/paper/qwen3_1_7b_2bit.yaml",
+        "configs/baselines/qwen3_1_7b_gptq_2bit.yaml",
     ),
     ("qwen3_1_7b", 3): (
         "configs/paper/qwen3_1_7b_3bit.yaml",
@@ -28,6 +36,10 @@ PAPER_EVAL_CONFIGS = {
         "configs/paper/qwen3_1_7b_4bit.yaml",
         "configs/baselines/qwen3_1_7b_gptq_4bit.yaml",
     ),
+    ("qwen3_4b", 2): (
+        "configs/paper/qwen3_4b_2bit.yaml",
+        "configs/baselines/qwen3_4b_gptq_2bit.yaml",
+    ),
     ("qwen3_4b", 3): (
         "configs/paper/qwen3_4b_3bit.yaml",
         "configs/baselines/qwen3_4b_gptq_3bit.yaml",
@@ -35,6 +47,10 @@ PAPER_EVAL_CONFIGS = {
     ("qwen3_4b", 4): (
         "configs/paper/qwen3_4b_4bit.yaml",
         "configs/baselines/qwen3_4b_gptq_4bit.yaml",
+    ),
+    ("qwen3_8b", 2): (
+        "configs/paper/qwen3_8b_2bit.yaml",
+        "configs/baselines/qwen3_8b_gptq_2bit.yaml",
     ),
     ("qwen3_8b", 3): (
         "configs/paper/qwen3_8b_3bit.yaml",
@@ -44,6 +60,10 @@ PAPER_EVAL_CONFIGS = {
         "configs/paper/qwen3_8b_4bit.yaml",
         "configs/baselines/qwen3_8b_gptq_4bit.yaml",
     ),
+    ("qwen3_14b", 2): (
+        "configs/paper/qwen3_14b_2bit.yaml",
+        "configs/baselines/qwen3_14b_gptq_2bit.yaml",
+    ),
     ("qwen3_14b", 3): (
         "configs/paper/qwen3_14b_3bit.yaml",
         "configs/baselines/qwen3_14b_gptq_3bit.yaml",
@@ -51,6 +71,10 @@ PAPER_EVAL_CONFIGS = {
     ("qwen3_14b", 4): (
         "configs/paper/qwen3_14b_4bit.yaml",
         "configs/baselines/qwen3_14b_gptq_4bit.yaml",
+    ),
+    ("qwen3_32b", 2): (
+        "configs/paper/qwen3_32b_2bit.yaml",
+        "configs/baselines/qwen3_32b_gptq_2bit.yaml",
     ),
     ("qwen3_32b", 3): (
         "configs/paper/qwen3_32b_3bit.yaml",
@@ -60,6 +84,10 @@ PAPER_EVAL_CONFIGS = {
         "configs/paper/qwen3_32b_4bit.yaml",
         "configs/baselines/qwen3_32b_gptq_4bit.yaml",
     ),
+    ("llama_7b", 2): (
+        "configs/paper/llama_7b_2bit.yaml",
+        "configs/baselines/llama_7b_gptq_2bit.yaml",
+    ),
     ("llama_7b", 3): (
         "configs/paper/llama_7b_3bit.yaml",
         "configs/baselines/llama_7b_gptq_3bit.yaml",
@@ -67,6 +95,10 @@ PAPER_EVAL_CONFIGS = {
     ("llama_7b", 4): (
         "configs/paper/llama_7b_4bit.yaml",
         "configs/baselines/llama_7b_gptq_4bit.yaml",
+    ),
+    ("mistral_7b", 2): (
+        "configs/paper/mistral_7b_2bit.yaml",
+        "configs/baselines/mistral_7b_gptq_2bit.yaml",
     ),
     ("mistral_7b", 3): (
         "configs/paper/mistral_7b_3bit.yaml",
@@ -79,6 +111,10 @@ PAPER_EVAL_CONFIGS = {
 }
 
 QWEN3_8B_C4_EVAL_CONFIGS = {
+    2: (
+        "configs/paper/qwen3_8b_2bit_c4_eval.yaml",
+        "configs/baselines/qwen3_8b_gptq_2bit_c4_eval.yaml",
+    ),
     3: (
         "configs/paper/qwen3_8b_3bit_c4_eval.yaml",
         "configs/baselines/qwen3_8b_gptq_3bit_c4_eval.yaml",
@@ -96,6 +132,9 @@ def test_every_model_bit_has_valid_sketchawq_and_gptq_configs() -> None:
         sketchawq = load_config(PROJECT_ROOT / sketchawq_config)
         baseline = load_baseline_config(PROJECT_ROOT / gptq_config)
         assert baseline.method.normalized_name() == "gptq"
+        assert baseline.method.adapter_kwargs["damp_percent"] == 0.01
+        assert baseline.method.adapter_kwargs["desc_act"] is True
+        assert baseline.method.adapter_kwargs["true_sequential"] is True
         assert sketchawq.model.repo_id == baseline.model.repo_id
         assert sketchawq.quantization.bits == baseline.quantization.bits
         assert sketchawq.calibration.dataset_name == baseline.calibration.dataset_name

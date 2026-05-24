@@ -60,6 +60,7 @@ Modal by default and can switch to GPTQ or local dry-runs:
 ```bash
 scripts/paper_eval/qwen3_14b_3bit.sh
 scripts/paper_eval/qwen3_14b_3bit.sh --gptq
+scripts/paper_eval/qwen3_4b_2bit.sh --method both --dry-run
 scripts/paper_eval/mistral_7b_4bit.sh --method both --dry-run
 scripts/paper_eval/qwen3_32b_4bit.sh --method both --dry-run
 scripts/run_paper_eval.sh qwen2_5_1_5b 4 --method gptq --backend local

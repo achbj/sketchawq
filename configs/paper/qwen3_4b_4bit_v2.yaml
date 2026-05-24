@@ -1,0 +1,92 @@
+# SketchAWQ — Qwen3-4B 4-bit v2 (fair GPTQ comparison)
+#
+# Fair comparison contract (matches qwen3_4b_gptq_4bit.yaml):
+#   group_size : 32   (same as GPTQ baseline)
+#   calibration: C4 train, 256 samples, seq 2048, packed, seed 42
+#   evaluation : WikiText2 validation, seq 2048, packed, full set
+#   dtype      : float16
+#
+# Key improvements over the old qwen3_4b_4bit.yaml:
+#   - group_size raised 16 → 32 to match GPTQ (old config had an unfair advantage)
+#   - search_objective: hybrid  (output-reconstruction signal for 4-bit is critical)
+#   - output_error_rows: 64     (more rows than the old 16 → better output signal)
+#   - output_error_weight: 1.0  (balanced with Hessian; old was 0.5 — too weak)
+#   - extended alpha grid: adds 0.5 to allow stronger activation-driven scaling
+#   - clip grid widened to cover [0.88..0.76] range for 4-bit
+#   - sketch rank 32 (vs 64 in old; better speed/quality balance at fair group size)
+#   - calibration batch_size 8  (speed — 32 batches instead of 256)
+
+model:
+  repo_id: Qwen/Qwen3-4B
+  dtype: float16
+  trust_remote_code: false
+  local_files_only: false
+
+quantization:
+  bits: 4
+  group_size: 32            # matches GPTQ baseline (was 16 — now fair)
+  symmetric: true
+  scale_clip_search: greedy
+  search_objective: hybrid
+  output_error_rows: 64
+  output_error_weight: 1.0
+  hessian_error_weight: 1.0
+  awq_scale_normalization: geometric_mean
+  awq_min_scale: 0.125
+  awq_max_scale: 8.0
+  awq_alpha_candidates: [0.0, 0.125, 0.25, 0.5]
+  clip_candidates: [0.88, 0.86, 0.84, 0.82, 0.80, 0.78, 0.76]
+
+outliers:
+  enabled: true
+  strategy: protect
+  metric: hessian_weight
+  fraction: 0.040
+  protected_bits: 16
+
+sketch:
+  enabled: true
+  mode: diagonal_low_rank
+  rank: 32
+  max_rows_per_batch: 128
+  diagonal_floor: 0.000001
+  low_rank_weight: 0.20
+  normalize_error_terms: true
+
+calibration:
+  source: dataset
+  dataset_name: allenai/c4
+  dataset_config: en
+  split: train
+  text_column: text
+  num_samples: 256
+  sequence_length: 2048
+  seed: 42
+  packing: true
+  batch_size: 8
+
+evaluation:
+  enabled: true
+  compare_original: true
+  benchmark_name: wikitext2_validation_packed_eval2048
+  use_calibration_data: false
+  source: dataset
+  dataset_name: wikitext
+  dataset_config: wikitext-2-raw-v1
+  split: validation
+  text_column: text
+  num_samples: null
+  sequence_length: 2048
+  packing: true
+  max_batches: null
+  measure_throughput: true
+
+output:
+  run_name: qwen3_4b_4bit_v2_fair_g32_hybrid_packed_eval2048
+  output_dir: artifacts
+  save_model: false
+
+runtime:
+  device: auto
+  seed: 42
+  log_level: INFO

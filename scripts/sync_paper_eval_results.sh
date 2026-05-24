@@ -3,7 +3,7 @@ set -euo pipefail
 
 usage() {
   cat >&2 <<'USAGE'
-Usage: scripts/sync_paper_eval_results.sh <model> <3|4|both> [options]
+Usage: scripts/sync_paper_eval_results.sh <model> <2|3|4|both|all> [options]
 
 Download paper-eval run artifacts from the Modal volume and build comparison tables/plots.
 
@@ -63,50 +63,65 @@ normalize_model() {
 
 normalize_bits_selector() {
   case "${1//-/_}" in
+    2|2bit|2_bit) echo "2" ;;
     3|3bit|3_bit) echo "3" ;;
     4|4bit|4_bit) echo "4" ;;
-    both|all|3_4|3and4) echo "both" ;;
-    *) die "bits must be 3, 4, or both; got '$1'" ;;
+    both|3_4|3and4) echo "both" ;;
+    all|2_3_4|2and3and4|all_bits) echo "all" ;;
+    *) die "bits must be 2, 3, 4, both, or all; got '$1'" ;;
   esac
 }
 
 bits_to_list() {
   case "$1" in
+    2) echo "2" ;;
     3) echo "3" ;;
     4) echo "4" ;;
     both) echo "3 4" ;;
+    all) echo "2 3 4" ;;
     *) die "unsupported bits selector '$1'" ;;
   esac
 }
 
 bits_slug() {
   case "$1" in
+    2) echo "2bit" ;;
     3) echo "3bit" ;;
     4) echo "4bit" ;;
     both) echo "3_4bit" ;;
+    all) echo "2_3_4bit" ;;
     *) die "unsupported bits selector '$1'" ;;
   esac
 }
 
 sketchawq_config() {
   case "$3:$1:$2" in
+    c4:qwen3_8b:2) echo "configs/paper/qwen3_8b_2bit_c4_eval.yaml" ;;
     c4:qwen3_8b:3) echo "configs/paper/qwen3_8b_3bit_c4_eval.yaml" ;;
     c4:qwen3_8b:4) echo "configs/paper/qwen3_8b_4bit_c4_eval.yaml" ;;
     c4:*) die "no C4 SketchAWQ eval config for $1 $2-bit" ;;
+    wikitext:qwen2_5_1_5b:2) echo "configs/paper/qwen2_5_1_5b_2bit.yaml" ;;
     wikitext:qwen2_5_1_5b:3) echo "configs/paper/qwen2_5_1_5b_3bit.yaml" ;;
     wikitext:qwen2_5_1_5b:4) echo "configs/paper/qwen2_5_1_5b_4bit.yaml" ;;
+    wikitext:qwen3_1_7b:2) echo "configs/paper/qwen3_1_7b_2bit.yaml" ;;
     wikitext:qwen3_1_7b:3) echo "configs/paper/qwen3_1_7b_3bit.yaml" ;;
     wikitext:qwen3_1_7b:4) echo "configs/paper/qwen3_1_7b_4bit.yaml" ;;
+    wikitext:qwen3_4b:2) echo "configs/paper/qwen3_4b_2bit.yaml" ;;
     wikitext:qwen3_4b:3) echo "configs/paper/qwen3_4b_3bit.yaml" ;;
     wikitext:qwen3_4b:4) echo "configs/paper/qwen3_4b_4bit.yaml" ;;
+    wikitext:qwen3_8b:2) echo "configs/paper/qwen3_8b_2bit.yaml" ;;
     wikitext:qwen3_8b:3) echo "configs/paper/qwen3_8b_3bit.yaml" ;;
     wikitext:qwen3_8b:4) echo "configs/paper/qwen3_8b_4bit.yaml" ;;
+    wikitext:qwen3_14b:2) echo "configs/paper/qwen3_14b_2bit.yaml" ;;
     wikitext:qwen3_14b:3) echo "configs/paper/qwen3_14b_3bit.yaml" ;;
     wikitext:qwen3_14b:4) echo "configs/paper/qwen3_14b_4bit.yaml" ;;
+    wikitext:qwen3_32b:2) echo "configs/paper/qwen3_32b_2bit.yaml" ;;
     wikitext:qwen3_32b:3) echo "configs/paper/qwen3_32b_3bit.yaml" ;;
     wikitext:qwen3_32b:4) echo "configs/paper/qwen3_32b_4bit.yaml" ;;
+    wikitext:llama_7b:2) echo "configs/paper/llama_7b_2bit.yaml" ;;
     wikitext:llama_7b:3) echo "configs/paper/llama_7b_3bit.yaml" ;;
     wikitext:llama_7b:4) echo "configs/paper/llama_7b_4bit.yaml" ;;
+    wikitext:mistral_7b:2) echo "configs/paper/mistral_7b_2bit.yaml" ;;
     wikitext:mistral_7b:3) echo "configs/paper/mistral_7b_3bit.yaml" ;;
     wikitext:mistral_7b:4) echo "configs/paper/mistral_7b_4bit.yaml" ;;
     *) die "no SketchAWQ paper-eval config for $1 $2-bit with eval '$3'" ;;
@@ -115,23 +130,32 @@ sketchawq_config() {
 
 gptq_config() {
   case "$3:$1:$2" in
+    c4:qwen3_8b:2) echo "configs/baselines/qwen3_8b_gptq_2bit_c4_eval.yaml" ;;
     c4:qwen3_8b:3) echo "configs/baselines/qwen3_8b_gptq_3bit_c4_eval.yaml" ;;
     c4:qwen3_8b:4) echo "configs/baselines/qwen3_8b_gptq_4bit_c4_eval.yaml" ;;
     c4:*) die "no C4 GPTQ eval config for $1 $2-bit" ;;
+    wikitext:qwen2_5_1_5b:2) echo "configs/baselines/qwen2_5_1_5b_gptq_2bit.yaml" ;;
     wikitext:qwen2_5_1_5b:3) echo "configs/baselines/qwen2_5_1_5b_gptq_3bit.yaml" ;;
     wikitext:qwen2_5_1_5b:4) echo "configs/baselines/qwen2_5_1_5b_gptq_4bit.yaml" ;;
+    wikitext:qwen3_1_7b:2) echo "configs/baselines/qwen3_1_7b_gptq_2bit.yaml" ;;
     wikitext:qwen3_1_7b:3) echo "configs/baselines/qwen3_1_7b_gptq_3bit.yaml" ;;
     wikitext:qwen3_1_7b:4) echo "configs/baselines/qwen3_1_7b_gptq_4bit.yaml" ;;
+    wikitext:qwen3_4b:2) echo "configs/baselines/qwen3_4b_gptq_2bit.yaml" ;;
     wikitext:qwen3_4b:3) echo "configs/baselines/qwen3_4b_gptq_3bit.yaml" ;;
     wikitext:qwen3_4b:4) echo "configs/baselines/qwen3_4b_gptq_4bit.yaml" ;;
+    wikitext:qwen3_8b:2) echo "configs/baselines/qwen3_8b_gptq_2bit.yaml" ;;
     wikitext:qwen3_8b:3) echo "configs/baselines/qwen3_8b_gptq_3bit.yaml" ;;
     wikitext:qwen3_8b:4) echo "configs/baselines/qwen3_8b_gptq_4bit.yaml" ;;
+    wikitext:qwen3_14b:2) echo "configs/baselines/qwen3_14b_gptq_2bit.yaml" ;;
     wikitext:qwen3_14b:3) echo "configs/baselines/qwen3_14b_gptq_3bit.yaml" ;;
     wikitext:qwen3_14b:4) echo "configs/baselines/qwen3_14b_gptq_4bit.yaml" ;;
+    wikitext:qwen3_32b:2) echo "configs/baselines/qwen3_32b_gptq_2bit.yaml" ;;
     wikitext:qwen3_32b:3) echo "configs/baselines/qwen3_32b_gptq_3bit.yaml" ;;
     wikitext:qwen3_32b:4) echo "configs/baselines/qwen3_32b_gptq_4bit.yaml" ;;
+    wikitext:llama_7b:2) echo "configs/baselines/llama_7b_gptq_2bit.yaml" ;;
     wikitext:llama_7b:3) echo "configs/baselines/llama_7b_gptq_3bit.yaml" ;;
     wikitext:llama_7b:4) echo "configs/baselines/llama_7b_gptq_4bit.yaml" ;;
+    wikitext:mistral_7b:2) echo "configs/baselines/mistral_7b_gptq_2bit.yaml" ;;
     wikitext:mistral_7b:3) echo "configs/baselines/mistral_7b_gptq_3bit.yaml" ;;
     wikitext:mistral_7b:4) echo "configs/baselines/mistral_7b_gptq_4bit.yaml" ;;
     *) die "no GPTQ paper-eval config for $1 $2-bit with eval '$3'" ;;

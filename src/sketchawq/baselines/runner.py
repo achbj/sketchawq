@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import gc
+import inspect
 import importlib.util
 import json
 import logging
@@ -708,13 +709,39 @@ def _make_gptqmodel_quantize_config(
     }
     if config_cls.__name__ == "QuantizeConfig":
         kwargs["method"] = method
-    kwargs.update(_gptqmodel_quantize_config_kwargs(config.method.adapter_kwargs))
+    kwargs.update(_gptqmodel_quantize_config_kwargs(config.method.adapter_kwargs, config_cls))
     return config_cls(**kwargs)
 
 
-def _gptqmodel_quantize_config_kwargs(adapter_kwargs: dict[str, Any]) -> dict[str, Any]:
+def _gptqmodel_quantize_config_kwargs(
+    adapter_kwargs: dict[str, Any],
+    config_cls: Any | None = None,
+) -> dict[str, Any]:
     """Keep runtime loader choices out of GPTQModel's quantization config dataclasses."""
-    return {key: value for key, value in adapter_kwargs.items() if key != "backend"}
+    kwargs = {key: value for key, value in adapter_kwargs.items() if key != "backend"}
+    if config_cls is None:
+        return kwargs
+
+    try:
+        signature = inspect.signature(config_cls)
+    except (TypeError, ValueError):
+        return kwargs
+
+    if any(
+        parameter.kind is inspect.Parameter.VAR_KEYWORD
+        for parameter in signature.parameters.values()
+    ):
+        return kwargs
+
+    allowed = set(signature.parameters)
+    ignored = sorted(key for key in kwargs if key not in allowed)
+    if ignored:
+        LOGGER.warning(
+            "Ignoring GPTQModel config kwargs unsupported by %s: %s",
+            getattr(config_cls, "__name__", config_cls),
+            ", ".join(ignored),
+        )
+    return {key: value for key, value in kwargs.items() if key in allowed}
 
 
 def _gptqmodel_quantize_backend(

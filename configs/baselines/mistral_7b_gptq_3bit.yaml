@@ -2,6 +2,10 @@ method:
   name: gptq
   label: GPTQModel-GPTQ
   calibration_batch_size: 1
+  adapter_kwargs:
+    damp_percent: 0.01
+    desc_act: true
+    true_sequential: true
 
 model:
   repo_id: mistralai/Mistral-7B-v0.3

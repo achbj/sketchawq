@@ -2,6 +2,10 @@ method:
   name: gptq
   label: GPTQModel-GPTQ
   calibration_batch_size: 1
+  adapter_kwargs:
+    damp_percent: 0.01
+    desc_act: true
+    true_sequential: true
 
 model:
   repo_id: Qwen/Qwen3-4B
@@ -11,7 +15,7 @@ model:
 
 quantization:
   bits: 4
-  group_size: 32
+  group_size: 128
   symmetric: true
 
 calibration:
