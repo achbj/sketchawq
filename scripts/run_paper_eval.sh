@@ -63,7 +63,8 @@ normalize_bits() {
     2|2bit|2_bit) echo "2" ;;
     3|3bit|3_bit) echo "3" ;;
     4|4bit|4_bit) echo "4" ;;
-    *) die "bits must be 2, 3, or 4; got '$1'" ;;
+    8|8bit|8_bit) echo "8" ;;
+    *) die "bits must be 2, 3, 4 or 8; got '$1'" ;;
   esac
 }
 
@@ -82,6 +83,7 @@ sketchawq_config() {
     wikitext:qwen3_4b:2) echo "configs/paper/qwen3_4b_2bit.yaml" ;;
     wikitext:qwen3_4b:3) echo "configs/paper/qwen3_4b_3bit.yaml" ;;
     wikitext:qwen3_4b:4) echo "configs/paper/qwen3_4b_4bit.yaml" ;;
+    wikitext:qwen3_4b:8) echo "configs/paper/qwen3_4b_8bit.yaml" ;;
     wikitext:qwen3_8b:2) echo "configs/paper/qwen3_8b_2bit.yaml" ;;
     wikitext:qwen3_8b:3) echo "configs/paper/qwen3_8b_3bit.yaml" ;;
     wikitext:qwen3_8b:4) echo "configs/paper/qwen3_8b_4bit.yaml" ;;

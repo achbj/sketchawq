@@ -78,6 +78,7 @@ sketchawq_config() {
     qwen3_4b:2) echo "configs/paper/qwen3_4b_2bit.yaml" ;;
     qwen3_4b:3) echo "configs/paper/qwen3_4b_3bit.yaml" ;;
     qwen3_4b:4) echo "configs/paper/qwen3_4b_4bit.yaml" ;;
+    qwen3_4b:8) echo "configs/paper/qwen3_4b_8bit.yaml" ;;
     qwen3_8b:2) echo "configs/paper/qwen3_8b_2bit.yaml" ;;
     qwen3_8b:3) echo "configs/paper/qwen3_8b_3bit.yaml" ;;
     qwen3_8b:4) echo "configs/paper/qwen3_8b_4bit.yaml" ;;
