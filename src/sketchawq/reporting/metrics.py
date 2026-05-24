@@ -89,6 +89,7 @@ RUN_SUMMARY_FIELDS = [
     "fp16_weight_mb",
     "estimated_quantized_mb",
     "estimated_compression_ratio",
+    "estimated_effective_bits_per_weight",
     "loss",
     "perplexity",
     "tokens_per_second",
@@ -158,6 +159,7 @@ LAYER_METRIC_FIELDS = [
     "fp16_weight_mb",
     "estimated_quantized_mb",
     "estimated_compression_ratio",
+    "estimated_effective_bits_per_weight",
     "outlier_strategy",
     "outlier_metric",
     "outlier_fraction",
@@ -292,6 +294,10 @@ def build_run_summary_row(report: dict[str, Any], config: SketchAWQConfig) -> di
         "fp16_weight_mb": fp16_weight_mb,
         "estimated_quantized_mb": estimated_quantized_mb,
         "estimated_compression_ratio": _optional_ratio(fp16_weight_mb, estimated_quantized_mb),
+        "estimated_effective_bits_per_weight": _effective_bits_per_weight(
+            fp16_weight_mb,
+            estimated_quantized_mb,
+        ),
         "loss": quantized_ppl.get("loss"),
         "perplexity": quantized_perplexity,
         "tokens_per_second": quantized_tps,
@@ -396,6 +402,10 @@ def build_layer_metric_rows(
                 "fp16_weight_mb": layer.get("fp16_weight_mb"),
                 "estimated_quantized_mb": layer.get("estimated_quantized_mb"),
                 "estimated_compression_ratio": layer.get("estimated_compression_ratio"),
+                "estimated_effective_bits_per_weight": _effective_bits_per_weight(
+                    layer.get("fp16_weight_mb"),
+                    layer.get("estimated_quantized_mb"),
+                ),
                 "outlier_strategy": layer.get("outlier_strategy", "none"),
                 "outlier_metric": layer.get("outlier_metric", config.outliers.metric),
                 "outlier_fraction": layer.get("outlier_fraction", config.outliers.fraction),
@@ -478,6 +488,16 @@ def _optional_ratio(value: float | None, baseline: float | None) -> float | None
     if value is None or baseline in {None, 0}:
         return None
     return float(value) / float(baseline)
+
+
+def _effective_bits_per_weight(
+    fp16_weight_mb: float | str | None,
+    estimated_quantized_mb: float | str | None,
+) -> float | None:
+    compression_ratio = _optional_ratio(fp16_weight_mb, estimated_quantized_mb)
+    if compression_ratio is None:
+        return None
+    return 16.0 / compression_ratio
 
 
 def _sum_layer_float(layers: list[dict[str, Any]], key: str) -> float | None:

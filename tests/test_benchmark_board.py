@@ -41,6 +41,7 @@ def _sample_rows() -> list[dict[str, str]]:
             "fp16_weight_mb": "8192",
             "estimated_quantized_mb": "2300",
             "estimated_compression_ratio": "3.56",
+            "estimated_effective_bits_per_weight": "4.49",
         },
         {
             "method": "SketchAWQ-diagonal-low-rank-outlier-protect-v0",
@@ -68,6 +69,7 @@ def _sample_rows() -> list[dict[str, str]]:
             "fp16_weight_mb": "8192",
             "estimated_quantized_mb": "2500",
             "estimated_compression_ratio": "3.28",
+            "estimated_effective_bits_per_weight": "4.88",
         },
         {
             "method": "SketchAWQ-diagonal-low-rank-outlier-protect-v0",
@@ -95,6 +97,7 @@ def _sample_rows() -> list[dict[str, str]]:
             "fp16_weight_mb": "8192",
             "estimated_quantized_mb": "1900",
             "estimated_compression_ratio": "4.31",
+            "estimated_effective_bits_per_weight": "3.71",
         },
         {
             "method": "GPTQModel-GPTQ",
@@ -122,6 +125,7 @@ def _sample_rows() -> list[dict[str, str]]:
             "fp16_weight_mb": "8192",
             "estimated_quantized_mb": "2100",
             "estimated_compression_ratio": "3.90",
+            "estimated_effective_bits_per_weight": "4.10",
         },
     ]
 
@@ -158,6 +162,7 @@ def test_html_summary_explains_context_and_delta_columns() -> None:
     assert "Delta vs Best" in html
     assert "Model Size" in html
     assert "FP16 Size" in html
+    assert "Eff. bpw" in html
     assert "GPU" in html
     assert "NVIDIA A100-SXM4-40GB" in html
     assert "Quantized Size" in html
@@ -185,6 +190,7 @@ def test_board_csv_includes_derived_comparison_fields(tmp_path: Path) -> None:
     assert "fp16_weight_mb" in header
     assert "estimated_quantized_mb" in header
     assert "estimated_compression_ratio" in header
+    assert "estimated_effective_bits_per_weight" in header
     assert "gpu_name" in header
     assert "calibration_batch_size" in header
 
