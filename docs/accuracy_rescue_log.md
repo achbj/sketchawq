@@ -12,7 +12,8 @@ Git state at log creation:
 
 - Branch: `main`
 - Pre-guardrail anchor commit: `8d05aab`
-- Guardrail setup head: `af1e850`
+- Guardrail setup commits: commits after `8d05aab`; use `git log --oneline
+  8d05aab..HEAD` to inspect the exact local checkpoint range.
 - Guardrail setup includes GPTQ paper-style setup, 2-bit diagnostic configs,
   2-bit launcher support, accuracy-rescue docs, and effective-bpw reporting.
 - Important pre-existing untracked files: `configs/paper/*_v2.yaml`; these were
