@@ -74,13 +74,13 @@ evaluation:
   split: validation
   text_column: text
   num_samples: null
-  sequence_length: 2048
+  sequence_length: 1024
   packing: true
   max_batches: null
   measure_throughput: true
 
 output:
-  run_name: llama_7b_3bit_v2_fair_g32_hybrid_packed_eval2048
+  run_name: llama_7b_3bit_v2_fair_g32_hybrid_packed_eval1024
   output_dir: artifacts
   save_model: false
 
