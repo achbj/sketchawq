@@ -70,7 +70,7 @@ evaluation:
   benchmark_name: wikitext2_validation_packed_eval2048
   use_calibration_data: false
   source: dataset
-  dataset_name: wikitext
+  dataset_name: Salesforce/wikitext
   dataset_config: wikitext-2-raw-v1
   split: validation
   text_column: text

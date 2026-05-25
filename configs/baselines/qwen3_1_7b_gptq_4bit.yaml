@@ -32,21 +32,21 @@ calibration:
 evaluation:
   enabled: true
   compare_original: true
-  benchmark_name: wikitext2_validation_packed_eval1024
+  benchmark_name: wikitext2_validation_packed_eval2048
   use_calibration_data: false
   source: dataset
-  dataset_name: wikitext
+  dataset_name: Salesforce/wikitext
   dataset_config: wikitext-2-raw-v1
   split: validation
   text_column: text
-  num_samples: 256
-  sequence_length: 1024
+  num_samples: null
+  sequence_length: 2048
   packing: true
-  max_batches: 256
+  max_batches: null
   measure_throughput: true
 
 output:
-  run_name: qwen3_1_7b_gptq_4bit_check_eval1024
+  run_name: qwen3_1_7b_gptq_4bit_check_eval2048
   output_dir: artifacts
   save_model: false
 
