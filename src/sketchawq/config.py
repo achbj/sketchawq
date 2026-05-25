@@ -58,6 +58,16 @@ CHANNEL_SENSITIVITY_METRICS = {
     "activation_weight",
     "hessian_weight",
 }
+PACKING_STRATEGIES = {"stream", "concat"}
+PACKING_STRATEGY_ALIASES = {
+    "default": "stream",
+    "eos": "stream",
+    "eos_stream": "stream",
+    "gptq": "concat",
+    "joined": "concat",
+    "concatenate": "concat",
+    "concatenated": "concat",
+}
 
 
 def _known_dataclass_kwargs(cls: type, values: dict[str, Any]) -> dict[str, Any]:
@@ -292,6 +302,7 @@ class CalibrationConfig:
     sequence_length: int = 128
     seed: int = 42
     packing: bool = False
+    packing_strategy: str = "stream"
     batch_size: int = 1
 
     def validate(self) -> None:
@@ -301,6 +312,14 @@ class CalibrationConfig:
             raise ValueError("sequence_length must be positive")
         if self.batch_size <= 0:
             raise ValueError("calibration.batch_size must be positive")
+        self.packing_strategy = self.packing_strategy.strip().lower().replace("-", "_")
+        self.packing_strategy = PACKING_STRATEGY_ALIASES.get(
+            self.packing_strategy,
+            self.packing_strategy,
+        )
+        if self.packing_strategy not in PACKING_STRATEGIES:
+            allowed = ", ".join(sorted(PACKING_STRATEGIES))
+            raise ValueError(f"calibration.packing_strategy must be one of {allowed}")
 
 
 @dataclass(slots=True)
@@ -317,6 +336,7 @@ class EvaluationConfig:
     num_samples: int | None = 32
     sequence_length: int = 1024
     packing: bool = False
+    packing_strategy: str = "stream"
     batch_size: int = 1
     max_batches: int | None = 4
     measure_throughput: bool = False
@@ -333,6 +353,14 @@ class EvaluationConfig:
             raise ValueError("evaluation.max_batches must be positive")
         if self.throughput_warmup_batches < 0:
             raise ValueError("evaluation.throughput_warmup_batches must be non-negative")
+        self.packing_strategy = self.packing_strategy.strip().lower().replace("-", "_")
+        self.packing_strategy = PACKING_STRATEGY_ALIASES.get(
+            self.packing_strategy,
+            self.packing_strategy,
+        )
+        if self.packing_strategy not in PACKING_STRATEGIES:
+            allowed = ", ".join(sorted(PACKING_STRATEGIES))
+            raise ValueError(f"evaluation.packing_strategy must be one of {allowed}")
 
 
 @dataclass(slots=True)

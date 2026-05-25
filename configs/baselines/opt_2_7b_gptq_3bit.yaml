@@ -1,0 +1,60 @@
+method:
+  name: gptq
+  label: GPTQModel-GPTQ
+  calibration_batch_size: 1
+  adapter_kwargs:
+    damp_percent: 0.01
+    desc_act: true
+    true_sequential: true
+
+model:
+  repo_id: facebook/opt-2.7b
+  dtype: float16
+  trust_remote_code: false
+  local_files_only: false
+
+quantization:
+  bits: 3
+  group_size: 128
+  symmetric: true
+
+calibration:
+  source: dataset
+  dataset_name: allenai/c4
+  dataset_config: en
+  split: train
+  text_column: text
+  num_samples: 128
+  sequence_length: 2048
+  seed: 42
+  packing: true
+  batch_size: 1
+
+evaluation:
+  enabled: true
+  compare_original: true
+  benchmark_name: wikitext2_test_packed_eval2048
+  use_calibration_data: false
+  source: dataset
+  dataset_name: Salesforce/wikitext
+  dataset_config: wikitext-2-raw-v1
+  split: test
+  text_column: text
+  num_samples: null
+  sequence_length: 2048
+  packing: true
+  packing_strategy: concat
+  batch_size: 1
+  max_batches: null
+  measure_throughput: true
+  throughput_warmup_batches: 1
+
+output:
+  run_name: opt_2_7b_gptq_3bit_g128_c4_128_wikitext2_test_concat_eval2048
+  output_dir: artifacts
+  save_model: false
+
+runtime:
+  device: auto
+  seed: 42
+  log_level: INFO

@@ -179,9 +179,14 @@ def load_external_baseline_model(
 
 
 def _validate_external_baseline_runtime_support(config: ExternalBaselineConfig) -> None:
-    if config.method.normalized_name() in {"awq", "llmcompressor_awq"} and (
-        config.quantization.bits != 4
-    ):
+    if config.method.normalized_name() == "awq" and config.quantization.bits != 4:
+        requested_backend = str(config.method.adapter_kwargs.get("backend", "awq_torch"))
+        if requested_backend.strip().lower().replace("-", "_") in {"awq_torch", "torch_awq"}:
+            raise RuntimeError(
+                "GPTQModel-AWQ awq_torch backend only supports 4-bit quantization; "
+                f"got bits={config.quantization.bits}."
+            )
+    if config.method.normalized_name() == "llmcompressor_awq" and config.quantization.bits != 4:
         raise RuntimeError(
             f"{config.method.display_label()} baseline only supports 4-bit quantization; "
             f"got bits={config.quantization.bits}."
@@ -205,6 +210,18 @@ def build_baseline_run_summary_row(
     quantized_tps = quantized_throughput.get("tokens_per_second")
     metadata = report.get("metadata", {})
     environment = metadata.get("environment", {})
+    storage = _storage_metrics(
+        fp16_weight_mb=quant.get("fp16_weight_mb"),
+        estimated_quantized_mb=quant.get("estimated_quantized_mb"),
+    )
+    storage["estimated_compression_ratio"] = quant.get(
+        "estimated_compression_ratio",
+        storage["estimated_compression_ratio"],
+    )
+    storage["estimated_effective_bits_per_weight"] = quant.get(
+        "estimated_effective_bits_per_weight",
+        storage["estimated_effective_bits_per_weight"],
+    )
     return {
         "run_id": metadata.get("run_id"),
         "created_at": metadata.get("created_at"),
@@ -254,9 +271,10 @@ def build_baseline_run_summary_row(
         "num_layers": quant.get("num_layers"),
         "quantization_seconds": quant.get("elapsed_seconds"),
         "cuda_peak_memory_mb": quant.get("cuda_peak_memory_mb"),
-        "fp16_weight_mb": "",
-        "estimated_quantized_mb": "",
-        "estimated_compression_ratio": "",
+        "fp16_weight_mb": storage["fp16_weight_mb"],
+        "estimated_quantized_mb": storage["estimated_quantized_mb"],
+        "estimated_compression_ratio": storage["estimated_compression_ratio"],
+        "estimated_effective_bits_per_weight": storage["estimated_effective_bits_per_weight"],
         "loss": quantized_ppl.get("loss"),
         "perplexity": quantized_perplexity,
         "tokens_per_second": quantized_tps,
@@ -426,6 +444,7 @@ def _load_gptqmodel_baseline(
         trust_remote_code=config.model.trust_remote_code,
         local_files_only=config.model.local_files_only,
     )
+    fp16_weight_mb = _model_parameter_storage_mb(_unwrap_torch_model(model_obj))
     _gptqmodel_quantize(
         model_obj,
         calibration_dataset,
@@ -434,6 +453,7 @@ def _load_gptqmodel_baseline(
     )
     quantized_reload_dir = Path(tempfile.mkdtemp(prefix="sketchawq_gptqmodel_"))
     _gptqmodel_save(model_obj, quantized_reload_dir)
+    estimated_quantized_mb = _directory_size_mb(quantized_reload_dir)
     reloaded_model_obj = _gptqmodel_reload_quantized(
         GPTQModel,
         gptqmodel_package,
@@ -457,6 +477,10 @@ def _load_gptqmodel_baseline(
         "elapsed_seconds": elapsed,
         "cuda_peak_memory_mb": _cuda_peak_memory_mb(),
         "num_layers": _count_linear_layers(model),
+        **_storage_metrics(
+            fp16_weight_mb=fp16_weight_mb,
+            estimated_quantized_mb=estimated_quantized_mb,
+        ),
     }
 
 
@@ -852,10 +876,10 @@ def _gptqmodel_backend_argument(
 ) -> Any:
     backend_enum = getattr(gptqmodel_package, "BACKEND", None)
     if requested is None and method == "awq" and backend_enum is not None:
-        for attr_name in ("AWQ_TORCH", "TORCH_AWQ"):
+        for attr_name in ("AUTO",):
             if hasattr(backend_enum, attr_name):
                 return getattr(backend_enum, attr_name)
-    backend_name = requested or ("awq_torch" if method == "awq" else "torch")
+    backend_name = requested or ("auto" if method == "awq" else "torch")
     normalized = backend_name.replace("-", "_").lower()
     if backend_enum is None:
         return normalized
@@ -965,6 +989,51 @@ def _count_linear_layers(model: torch.nn.Module) -> int:
     return sum(1 for module in model.modules() if isinstance(module, torch.nn.Linear))
 
 
+def _model_parameter_storage_mb(model: torch.nn.Module) -> float:
+    seen: set[tuple[int, int, int, int]] = set()
+    total_bytes = 0
+    for tensor in list(model.parameters()) + list(model.buffers()):
+        if tensor.is_meta:
+            continue
+        storage = tensor.untyped_storage()
+        key = (
+            storage.data_ptr(),
+            tensor.storage_offset(),
+            tensor.numel(),
+            tensor.element_size(),
+        )
+        if key in seen:
+            continue
+        seen.add(key)
+        total_bytes += tensor.numel() * tensor.element_size()
+    return total_bytes / 1_000_000
+
+
+def _directory_size_mb(path: Path) -> float:
+    total_bytes = 0
+    for item in path.rglob("*"):
+        if item.is_file():
+            total_bytes += item.stat().st_size
+    return total_bytes / 1_000_000
+
+
+def _storage_metrics(
+    *,
+    fp16_weight_mb: float | str | None,
+    estimated_quantized_mb: float | str | None,
+) -> dict[str, float | None]:
+    fp16_mb = _optional_float(fp16_weight_mb)
+    quantized_mb = _optional_float(estimated_quantized_mb)
+    compression_ratio = _optional_ratio(fp16_mb, quantized_mb)
+    effective_bits = None if compression_ratio is None else 16.0 / compression_ratio
+    return {
+        "fp16_weight_mb": fp16_mb,
+        "estimated_quantized_mb": quantized_mb,
+        "estimated_compression_ratio": compression_ratio,
+        "estimated_effective_bits_per_weight": effective_bits,
+    }
+
+
 def _device_argument(device: torch.device) -> str:
     if device.type == "cuda":
         return "cuda"
@@ -991,3 +1060,9 @@ def _optional_ratio(value: float | None, baseline: float | None) -> float | None
     if value is None or baseline in {None, 0}:
         return None
     return float(value) / float(baseline)
+
+
+def _optional_float(value: float | str | None) -> float | None:
+    if value in {None, ""}:
+        return None
+    return float(value)

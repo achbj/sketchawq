@@ -4,9 +4,12 @@ Use GPTQ as the first paper-eval baseline because it is common, weight-only, and
 
 Useful next methods:
 
-1. AWQ / GPTQModel-AWQ
+1. AWQ / official llm-awq
    - Closest conceptual baseline to SketchAWQ because SketchAWQ extends AWQ-style scaling.
    - Good for answering: does the Hessian sketch signal improve over standard AWQ?
+   - Use the external `/Users/achbj/Work/quantization` `mit-han-lab/llm-awq` harness as the paper-style AWQ reference for OPT-2.7B.
+   - Current OPT-2.7B anchors: W4-g128 fake-quant WikiText2 PPL `12.7043`; W3-g128 fake-quant WikiText2 PPL `13.5499`.
+   - Treat GPTQModel-AWQ as an implementation/backend check only until it reproduces the official `llm-awq` numbers. The `awq_torch` run with PPL `9837.5970` is rejected.
 
 2. HQQ
    - Strong no-calibration or light-calibration quantization baseline.

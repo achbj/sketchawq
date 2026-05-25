@@ -1,6 +1,6 @@
 # SketchAWQ Experiment Ledger
 
-Last updated: 2026-05-19
+Last updated: 2026-05-25
 
 This is the detailed experiment record. The goal is to preserve every important run decision, not just the final pretty board.
 
@@ -44,6 +44,154 @@ As of 2026-05-18:
 - Next work should split into real inference benchmarking and approximation failure diagnostics.
 
 ## Experiment Timeline
+
+### 2026-05-25 18:22:53 - OPT-2.7B GPTQ Concat Baseline Sync
+
+Status:
+- Accepted as paper-protocol baseline check for GPTQ.
+
+Artifact:
+- `artifacts/modal/opt_2_7b_concat_baselines_20260525_182253`
+- `artifacts/paper_eval/opt_2_7b_concat_baselines_20260525_182253`
+
+Purpose:
+- Verify the corrected OPT-2.7B WikiText2 concatenated evaluation protocol.
+
+Setup:
+- Model: `facebook/opt-2.7b`
+- Calibration: C4 train, 128 samples, sequence length 2048, packed stream
+- Evaluation: WikiText2 test, sequence length 2048, `packing_strategy: concat`
+- GPU: NVIDIA A100-SXM4-40GB
+
+Rows:
+
+| Bits | Method | FP16 PPL | Quantized PPL | FP16 MB | GPTQ MB | Compression | Decision |
+| ---: | --- | ---: | ---: | ---: | ---: | ---: | --- |
+| 3 | GPTQModel-GPTQ | 12.4710 | 14.6416 | 5303.2 | 1292.4 | 4.10x | Accept: FP16 anchor is paper-like and quantized row is strong. |
+| 4 | GPTQModel-GPTQ | 12.4710 | 12.6324 | 5303.2 | 1607.0 | 3.30x | Accept: close to FP16 and suitable as the GPTQ W4 reference. |
+
+Decision:
+- The corrected concat evaluation fixed the FP16 anchor, from 19.0135 down to 12.4710.
+- This confirms the old OPT results were dominated by evaluation protocol mismatch, not GPTQ quality.
+- Use these GPTQ rows as the OPT-2.7B sanity check before comparing SketchAWQ or AWQ.
+- Size values were backfilled as structure estimates: quantized linear weights plus FP16 non-quantized parameters. Future GPTQ runs record the actual saved GPTQModel folder size during quantization.
+
+Next action:
+- Run or debug AWQ 4-bit separately under the corrected concat protocol.
+- Do not compare AWQ 3-bit with `awq_torch`; that backend rejected non-4-bit kernels.
+
+### 2026-05-25 19:20 - OPT-2.7B GPTQModel-AWQ Torch Backend Failure
+
+Status:
+- Rejected.
+
+Artifact:
+- `artifacts/modal/opt_2_7b_concat_baselines_20260525_182253/runs/opt_2_7b_awq_4bit_g128_c4_128_wikitext2_test_concat_eval2048`
+
+Rows:
+
+| Bits | Method | Backend | FP16 PPL | Quantized PPL | Decision |
+| ---: | --- | --- | ---: | ---: | --- |
+| 4 | GPTQModel-AWQ | `awq_torch` | 12.4710 | 9837.5970 | Reject: quantized runtime/checkpoint is unusable. |
+
+Diagnosis:
+- Evaluation protocol is correct because FP16 is 12.4710 and GPTQ 4-bit is 12.6324 on the same bundle.
+- The failure is specific to the GPTQModel-AWQ backend path we selected.
+- The config forced `backend: awq_torch`; GPTQModel's auto path chooses AWQ GEMM for GEMM-format AWQ on CUDA, while `awq_torch` is the portable torch fallback.
+
+Change made:
+- Updated OPT AWQ 4-bit config to `backend: auto`.
+- Updated the local GPTQModel AWQ default backend from `awq_torch` to `auto`.
+
+Next action:
+- Rerun `scripts/run_opt_baselines.sh 4 --method awq --gpu A100`.
+- If AWQ is still bad with `backend: auto`, switch this baseline to official `llm-awq`/AutoAWQ rather than treating GPTQModel-AWQ as the reference.
+
+### 2026-05-25 19:39 - OPT-2.7B Official llm-awq Baseline Check
+
+Status:
+- Accepted as the AWQ paper-style reference for OPT-2.7B.
+
+External repo:
+- `/Users/achbj/Work/quantization`
+
+Artifact:
+- Modal run: `https://modal.com/apps/ach-bj7/main/ap-aitDVJHk0331a9MfNSYnyp`
+- Modal run: `https://modal.com/apps/ach-bj7/main/ap-KF5S7nbKhM53rfxzrx0XAF`
+- Modal volume reports:
+  - `/artifacts/opt_2_7b_awq_4bit_g128_wikitext2/report.json`
+  - `/artifacts/opt_2_7b_awq_3bit_g128_wikitext2/report.json`
+- Recovered local summary: `/Users/achbj/Work/quantization/artifacts/recovered/opt_2_7b_awq_recovered_20260525.json`
+
+Purpose:
+- Check AWQ with the official `mit-han-lab/llm-awq` path instead of GPTQModel-AWQ.
+- Establish the AWQ paper-comparable anchor for OPT-2.7B before judging SketchAWQ.
+
+Setup:
+- Model: `facebook/opt-2.7b`
+- Method: official `llm-awq`
+- Quantization: asymmetric AWQ, group size 128
+- Calibration: AWQ built-in Pile validation subset, 128 samples
+- Evaluation: WikiText2 test, sequence length 2048, concatenated text blocks
+- Backend: `q_backend=fake`
+
+Rows:
+
+| Bits | Method | Backend | FP16 Ref PPL | Quantized PPL | Delta | Decision |
+| ---: | --- | --- | ---: | ---: | ---: | --- |
+| 3 | official llm-awq | fake quant | 12.47 | 13.5499 | +1.0799 | Accept: matches AWQ INT3-g128 paper anchor. |
+| 4 | official llm-awq | fake quant | 12.47 | 12.7043 | +0.2343 | Accept: close to FP16 and usable as the W4 AWQ reference. |
+
+Diagnosis:
+- These numbers show AWQ itself is healthy on OPT-2.7B.
+- The earlier `9837.5970` PPL row is a GPTQModel-AWQ backend failure, not an AWQ algorithm failure.
+- AWQ 3-bit should be compared through fake-quant evaluation because the original `llm-awq` repository does not provide a 3-bit CUDA inference kernel.
+- The external harness report JSON originally recorded run status but not the printed PPL. Patched `/Users/achbj/Work/quantization/infra/modal/baseline_app.py` so future AWQ reports include `awq_eval.json` plus parsed WikiText2 PPL in `report.json`. The current Modal JSONs still need a rerun to include those fields.
+
+Next action:
+- Treat official `llm-awq` fake-quant rows as the AWQ reference until GPTQModel-AWQ reproduces them.
+- Compare SketchAWQ against AWQ targets: W4 near `12.70`, W3 near `13.55` on OPT-2.7B WikiText2 test.
+
+### 2026-05-25 17:40:45 - OPT-2.7B GPTQ/AWQ Baseline Sync
+
+Status:
+- Rejected as paper-comparison evidence.
+
+Artifact:
+- `artifacts/modal/opt_2_7b_baselines_20260525_174045`
+- `artifacts/paper_eval/opt_2_7b_baselines_20260525_174045`
+
+Purpose:
+- Check whether the first OPT-2.7B GPTQ/AWQ baseline configs reproduce paper-like WikiText2 loss.
+
+Setup:
+- Model: `facebook/opt-2.7b`
+- Calibration: C4 train, 128 samples, sequence length 2048, packed stream
+- Evaluation: WikiText2 test, sequence length 2048, packed stream with EOS separators
+- GPU: A100 variants
+
+Rows:
+
+| Bits | Method | Status | FP16 PPL | Quantized PPL | Decision |
+| ---: | --- | --- | ---: | ---: | --- |
+| 3 | GPTQModel-GPTQ | done | 19.0135 | 22.2432 | Reject: FP16 anchor too high for GPTQ paper protocol. |
+| 4 | GPTQModel-GPTQ | done | 19.0135 | 19.9237 | Reject: FP16 anchor too high for GPTQ paper protocol. |
+| 3 | GPTQModel-AWQ | failed | n/a | n/a | Backend rejected AWQ 3-bit: `AwqTorchLinear` supports only 4-bit. |
+| 4 | GPTQModel-AWQ | done | 19.0135 | 10871.2447 | Reject: severe quality failure; investigate backend/config only after eval anchor is fixed. |
+
+Diagnosis:
+- The GPTQ paper's OPT-2.7B WikiText2 table reports FP16 around 12.46, GPTQ-4 around 12.87, and GPTQ-3 around 16.88.
+- The local FP16 anchor was 19.0135, so the evaluation text packing was not paper-comparable.
+- The likely mismatch was the old packed stream path inserting EOS-style separators between WikiText rows; GPTQ's reference loader concatenates WikiText text with blank-line separators and slices fixed-length blocks.
+
+Change made:
+- Added `packing_strategy: concat` for paper-style concatenated evaluation.
+- Updated OPT configs to use `evaluation.packing_strategy: concat`.
+- Updated `scripts/run_opt_baselines.sh` to skip AWQ 3-bit by default because GPTQModel `awq_torch` rejects it.
+
+Next action:
+- Rerun supported OPT-2.7B rows: GPTQ 3-bit, GPTQ 4-bit, AWQ 4-bit.
+- Treat AWQ 3-bit as requiring a different backend or a fake-quant paper harness, not the current `awq_torch` runtime path.
 
 ### 2026-05-17 16:32:59 - Qwen3-4B Fair Balanced Baseline
 

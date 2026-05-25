@@ -1,6 +1,6 @@
 # SketchAWQ Accuracy Rescue Log
 
-Last updated: 2026-05-24
+Last updated: 2026-05-25
 
 Purpose: improve 4-bit toward near-FP16 loss and move 3-bit toward current
 4-bit quality without overfitting one leaderboard row or hiding extra storage
@@ -106,6 +106,45 @@ Dry-run before spending GPU time:
 scripts/run_paper_eval.sh qwen3_4b 4 --method both --gpu A100 --dry-run
 scripts/sync_paper_eval_results.sh qwen3_4b all --method both --dry-run
 ```
+
+Run supported OPT-2.7B GPTQ/AWQ baselines against a paper-style recipe:
+
+```bash
+scripts/run_opt_baselines.sh both --method both --gpu A100
+```
+
+Dry-run the same OPT-2.7B rows before spending GPU time:
+
+```bash
+scripts/run_opt_baselines.sh both --method both --gpu A100 --dry-run
+```
+
+OPT-2.7B baseline configs:
+
+| Config | Method | Bits | Group | Calibration | Evaluation | Run name |
+| --- | --- | ---: | ---: | --- | --- | --- |
+| `configs/baselines/opt_2_7b_gptq_3bit.yaml` | GPTQModel-GPTQ | 3 | 128 | C4 train, 128 x 2048 packed | WikiText2 test, full 2048-token concat blocks | `opt_2_7b_gptq_3bit_g128_c4_128_wikitext2_test_concat_eval2048` |
+| `configs/baselines/opt_2_7b_gptq_4bit.yaml` | GPTQModel-GPTQ | 4 | 128 | C4 train, 128 x 2048 packed | WikiText2 test, full 2048-token concat blocks | `opt_2_7b_gptq_4bit_g128_c4_128_wikitext2_test_concat_eval2048` |
+| `configs/baselines/opt_2_7b_awq_3bit.yaml` | GPTQModel-AWQ | 3 | 128 | C4 train, 128 x 2048 packed | WikiText2 test, full 2048-token concat blocks | `opt_2_7b_awq_3bit_g128_c4_128_wikitext2_test_concat_eval2048` |
+| `configs/baselines/opt_2_7b_awq_4bit.yaml` | GPTQModel-AWQ | 4 | 128 | C4 train, 128 x 2048 packed | WikiText2 test, full 2048-token concat blocks | `opt_2_7b_awq_4bit_g128_c4_128_wikitext2_test_concat_eval2048` |
+
+Notes:
+- GPTQ rows use `damp_percent: 0.01`, `desc_act: true`, and `true_sequential: true`.
+- AWQ rows use GPTQModel-AWQ with `backend: auto` and asymmetric zero-point style quantization through `symmetric: false`. GPTQModel's AWQ auto path should choose the AWQ GEMM backend for normal GEMM-format AWQ instead of the portable torch fallback.
+- OPT evaluation uses `packing_strategy: concat` to match the GPTQ reference WikiText2 protocol: concatenate the split text with blank-line separators, then evaluate fixed-length blocks without inserting EOS tokens between dataset rows.
+- GPTQModel-AWQ is configured for 3-bit and 4-bit here because the AWQ reference repo documents INT3/INT4 support for OPT. The `awq_torch` runtime backend rejects 3-bit kernels, so `scripts/run_opt_baselines.sh both --method both` skips AWQ 3-bit unless `--include-awq-3bit` is passed explicitly.
+
+External AWQ reference check from `/Users/achbj/Work/quantization`:
+
+| Bits | Method | Backend | Calibration | Evaluation | PPL |
+| ---: | --- | --- | --- | --- | ---: |
+| 3 | official `mit-han-lab/llm-awq` | fake quant | Pile validation, 128 samples | WikiText2 test, 2048-token concat blocks | 13.5499 |
+| 4 | official `mit-han-lab/llm-awq` | fake quant | Pile validation, 128 samples | WikiText2 test, 2048-token concat blocks | 12.7043 |
+
+Interpretation:
+- Use these external `llm-awq` rows as the AWQ paper-style OPT-2.7B targets.
+- The GPTQModel-AWQ `9837.5970` PPL run is a backend failure, not evidence that AWQ is weak.
+- AWQ 3-bit is a fake-quant paper comparison row; do not expect a real 3-bit CUDA kernel from the original AWQ repo.
 
 ## Revert Notes
 

@@ -41,6 +41,7 @@ class TextBatchConfig:
     sequence_length: int
     seed: int
     packing: bool
+    packing_strategy: str = "stream"
     batch_size: int = 1
 
     @classmethod
@@ -55,6 +56,7 @@ class TextBatchConfig:
             sequence_length=config.sequence_length,
             seed=config.seed,
             packing=config.packing,
+            packing_strategy=config.packing_strategy,
             batch_size=config.batch_size,
         )
 
@@ -70,6 +72,7 @@ class TextBatchConfig:
             sequence_length=config.sequence_length,
             seed=seed,
             packing=config.packing,
+            packing_strategy=config.packing_strategy,
             batch_size=config.batch_size,
         )
 
@@ -97,6 +100,21 @@ def _iter_texts(config: TextBatchConfig, *, repeat_synthetic: bool = False) -> I
         text = str(row.get(config.text_column, "")).strip()
         if text:
             yield text
+
+
+def _iter_raw_texts(config: TextBatchConfig, *, repeat_synthetic: bool = False) -> Iterable[str]:
+    if config.source == "synthetic":
+        source = cycle(_SYNTHETIC_TEXTS) if repeat_synthetic else iter(_SYNTHETIC_TEXTS)
+        for text in source:
+            yield text
+        return
+
+    if config.source != "dataset":
+        raise ValueError("text batch source must be either 'synthetic' or 'dataset'")
+
+    dataset = load_dataset(config.dataset_name, config.dataset_config, split=config.split, streaming=True)
+    for row in dataset:
+        yield str(row.get(config.text_column, ""))
 
 
 def make_calibration_batches(
@@ -172,6 +190,12 @@ def _make_packed_text_batches(
 
 
 def _select_packed_chunks(tokenizer, config: TextBatchConfig) -> list[list[int]]:
+    if config.packing_strategy == "concat":
+        chunks = _concat_packed_chunks(tokenizer, config)
+        if config.num_samples is None:
+            return chunks
+        return chunks[: config.num_samples]
+
     if config.num_samples is None:
         return list(_iter_packed_chunks(tokenizer, config))
 
@@ -188,6 +212,21 @@ def _select_packed_chunks(tokenizer, config: TextBatchConfig) -> list[list[int]]
     pool: list[list[int]] = list(islice(_iter_packed_chunks(tokenizer, config), pool_size))
     rng.shuffle(pool)
     return pool[: config.num_samples]
+
+
+def _concat_packed_chunks(tokenizer, config: TextBatchConfig) -> list[list[int]]:
+    text = "\n\n".join(_iter_raw_texts(config))
+    encoded = tokenizer(text, return_tensors="pt")
+    input_ids = encoded["input_ids"]
+    if isinstance(input_ids, torch.Tensor):
+        token_ids = input_ids.squeeze(0).tolist()
+    else:
+        token_ids = input_ids[0] if input_ids and isinstance(input_ids[0], list) else input_ids
+    usable_tokens = (len(token_ids) // config.sequence_length) * config.sequence_length
+    return [
+        [int(token_id) for token_id in token_ids[start : start + config.sequence_length]]
+        for start in range(0, usable_tokens, config.sequence_length)
+    ]
 
 
 def _iter_packed_chunks(

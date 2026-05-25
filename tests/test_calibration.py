@@ -277,3 +277,64 @@ def test_packed_text_batches_with_no_sample_cap_use_all_chunks(monkeypatch) -> N
     torch.testing.assert_close(batches[0].input_ids, torch.tensor([[1, 2, 99]]))
     torch.testing.assert_close(batches[1].input_ids, torch.tensor([[3, 4, 99]]))
     torch.testing.assert_close(batches[2].input_ids, torch.tensor([[5, 6, 99]]))
+
+
+def test_concat_packed_text_batches_match_gptq_style_without_eos_separators(
+    monkeypatch,
+) -> None:
+    monkeypatch.setattr(
+        calibration,
+        "load_dataset",
+        lambda *args, **kwargs: [
+            {"text": "alpha beta"},
+            {"text": ""},
+            {"text": "gamma delta"},
+        ],
+    )
+    tokenizer = WhitespaceTokenizer()
+    config = TextBatchConfig(
+        source="dataset",
+        dataset_name="wikitext",
+        dataset_config="wikitext-2-raw-v1",
+        split="test",
+        text_column="text",
+        num_samples=None,
+        sequence_length=2,
+        seed=123,
+        packing=True,
+        packing_strategy="concat",
+    )
+
+    batches = make_text_batches(tokenizer, config, device=torch.device("cpu"))
+
+    assert len(batches) == 2
+    torch.testing.assert_close(batches[0].input_ids, torch.tensor([[1, 2]]))
+    torch.testing.assert_close(batches[1].input_ids, torch.tensor([[3, 4]]))
+
+
+def test_config_parses_packing_strategy(tmp_path) -> None:
+    config_path = tmp_path / "concat_eval.yaml"
+    config_path.write_text(
+        """
+calibration:
+  source: synthetic
+  num_samples: 2
+  sequence_length: 16
+  packing: true
+  packing_strategy: stream
+evaluation:
+  use_calibration_data: false
+  source: dataset
+  num_samples: null
+  sequence_length: 2048
+  max_batches: null
+  packing: true
+  packing_strategy: concat
+""",
+        encoding="utf-8",
+    )
+
+    config = load_config(config_path)
+
+    assert config.calibration.packing_strategy == "stream"
+    assert config.evaluation.packing_strategy == "concat"
