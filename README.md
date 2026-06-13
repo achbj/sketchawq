@@ -95,6 +95,16 @@ scripts/sync_paper_eval_results.sh qwen3_8b both --method both
 This downloads the expected run folders from the `sketchawq-artifacts` Modal volume into
 `artifacts/modal/` and writes CSV/HTML/PNG/PDF outputs into `artifacts/paper_eval/`.
 
+Run the isolated strict-budget scale-refinement experiment with:
+
+```bash
+scripts/run_strict_budget_ablation.sh both --variant both --gpu A100
+scripts/sync_strict_budget_ablation.sh both
+```
+
+Its hypothesis, controls, promotion rule, and rollback path are documented in
+[docs/strict_budget_scale_refinement.md](docs/strict_budget_scale_refinement.md).
+
 Run the Qwen3-8B cross-eval on C4 validation with:
 
 ```bash

@@ -22,6 +22,7 @@ from sketchawq.quant.pack import PackedQuantizedTensor, pack_quantized_tensor
 from sketchawq.quant.quantizer import (
     dequantize_weight_with_input_scale,
     quantize_weight_with_input_scale,
+    refine_quantized_scales,
 )
 
 LOGGER = logging.getLogger(__name__)
@@ -38,6 +39,8 @@ class LayerQuantizationSummary:
     uses_diagonal: bool
     uses_low_rank: bool
     scale_clip_search: str
+    scale_refinement: str
+    scale_refinement_steps: int
     awq_alpha: float
     clip_ratio: float
     awq_scale_normalization: str
@@ -228,6 +231,16 @@ def quantize_model(
             clip_ratio=search_result.clip_ratio,
             input_scale=search_result.scales,
         )
+        if effective_quant_config.scale_refinement == "sketch":
+            quantized = refine_quantized_scales(
+                weight,
+                quantized,
+                input_scale=search_result.scales,
+                diagonal=sketch.diagonal,
+                basis=sketch.basis,
+                low_rank_weight=config.sketch.low_rank_weight,
+                steps=effective_quant_config.scale_refinement_steps,
+            )
         quantized_weight = dequantize_weight_with_input_scale(
             quantized,
             input_scale=search_result.scales,
@@ -301,6 +314,8 @@ def quantize_model(
                 uses_diagonal=sketch.diagonal is not None,
                 uses_low_rank=sketch.basis is not None,
                 scale_clip_search=effective_quant_config.scale_clip_search,
+                scale_refinement=effective_quant_config.scale_refinement,
+                scale_refinement_steps=effective_quant_config.scale_refinement_steps,
                 awq_alpha=search_result.alpha,
                 clip_ratio=search_result.clip_ratio,
                 awq_scale_normalization=effective_quant_config.awq_scale_normalization,
@@ -415,6 +430,9 @@ def _method_label(config: SketchAWQConfig) -> str:
         label = "SketchAWQ-diagonal-v0"
     else:
         label = "SketchAWQ-diagonal-low-rank-v0"
+    if config.quantization.scale_refinement == "sketch":
+        label = label.removesuffix("-v0")
+        label = f"{label}-scale-refine-v0"
     if config.outliers.active():
         label = label.removesuffix("-v0")
         label = f"{label}-outlier-{config.outliers.strategy}-v0"

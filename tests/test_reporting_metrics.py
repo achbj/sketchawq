@@ -74,6 +74,8 @@ def test_run_summary_includes_global_storage_estimates() -> None:
     assert row["stats_accumulator_dtype"] == "float32"
     assert row["awq_min_scale"] == config.quantization.awq_min_scale
     assert row["awq_max_scale"] == config.quantization.awq_max_scale
+    assert row["scale_refinement"] == config.quantization.scale_refinement
+    assert row["scale_refinement_steps"] == config.quantization.scale_refinement_steps
 
 
 def test_layer_metrics_include_effective_bits_per_weight() -> None:
@@ -99,6 +101,8 @@ def test_layer_metrics_include_effective_bits_per_weight() -> None:
     row = build_layer_metric_rows(report, config)[0]
 
     assert row["estimated_effective_bits_per_weight"] == pytest.approx(5.0)
+    assert row["scale_refinement"] == config.quantization.scale_refinement
+    assert row["scale_refinement_steps"] == config.quantization.scale_refinement_steps
 
 
 def test_layer_metrics_keep_joint_search_score_separate_from_stage_scores() -> None:

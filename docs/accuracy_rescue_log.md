@@ -1,6 +1,6 @@
 # SketchAWQ Accuracy Rescue Log
 
-Last updated: 2026-05-25
+Last updated: 2026-06-13
 
 Purpose: improve 4-bit toward near-FP16 loss and move 3-bit toward current
 4-bit quality without overfitting one leaderboard row or hiding extra storage
@@ -161,3 +161,37 @@ If an idea is rejected, do not delete the artifact. Mark it rejected here and in
 `docs/experiment_ledger.md`, then either revert the small config/code change or
 create a new fixed config with a new run name. Avoid overwriting historical run
 names.
+
+## 2026-06-13 - Strict-Budget Sketch-Conditioned Scale Refinement
+
+Status:
+- Implemented, awaiting GPU results.
+
+Git:
+- Base commit: `255a6a2`
+- Branch: `codex/sketch-conditioned-refinement`
+
+Hypothesis:
+- Refitting group scales directly against the diagonal-plus-low-rank sketch
+  objective can improve W3/W4 reconstruction without protected channels,
+  smaller groups, or extra stored parameters.
+
+Guardrails:
+- Qwen3-4B control and treatment use group size 128 and no FP16 protection.
+- The only treatment change is `scale_refinement: sketch`.
+- Promotion requires wins at both bit widths followed by alternate-seed,
+  Qwen3-8B, and non-Qwen confirmation.
+
+Commands:
+
+```bash
+scripts/run_strict_budget_ablation.sh both --variant both --gpu A100
+scripts/sync_strict_budget_ablation.sh both
+```
+
+Detailed protocol:
+- `docs/strict_budget_scale_refinement.md`
+
+Decision:
+- Do not modify canonical paper configs until the controlled experiment passes
+  its promotion rule.

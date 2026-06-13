@@ -131,6 +131,179 @@ def quantize_weight_with_input_scale(
     )
 
 
+def refine_quantized_scales(
+    weight: torch.Tensor,
+    quantized: QuantizedTensor,
+    *,
+    input_scale: torch.Tensor | None = None,
+    diagonal: torch.Tensor | None = None,
+    basis: torch.Tensor | None = None,
+    low_rank_weight: float = 0.15,
+    steps: int = 3,
+) -> QuantizedTensor:
+    """Refit symmetric group scales against a diagonal-plus-low-rank sketch."""
+    if steps <= 0:
+        return quantized
+    if not quantized.symmetric:
+        raise ValueError("Sketch-conditioned scale refinement requires symmetric quantization")
+    if weight.ndim != 2 or tuple(weight.shape) != quantized.original_shape:
+        raise ValueError("weight shape must match the quantized tensor")
+    if low_rank_weight < 0:
+        raise ValueError("low_rank_weight must be non-negative")
+
+    device = weight.device
+    work = weight.detach().to(device=device, dtype=torch.float32)
+    qweight = quantized.qweight.detach().to(device=device, dtype=torch.float32)
+    padded_weight, pad = _pad_last_dim(work, quantized.group_size)
+    padded_qweight, _ = _pad_last_dim(qweight, quantized.group_size)
+    out_features, padded_in_features = padded_weight.shape
+    groups_per_row = padded_in_features // quantized.group_size
+    grouped_weight = padded_weight.reshape(
+        out_features,
+        groups_per_row,
+        quantized.group_size,
+    )
+    grouped_qweight = padded_qweight.reshape_as(grouped_weight)
+
+    if input_scale is None:
+        safe_input_scale = torch.ones(weight.shape[1], device=device, dtype=torch.float32)
+    else:
+        safe_input_scale = input_scale.detach().to(
+            device=device,
+            dtype=torch.float32,
+        ).clamp_min(1e-6)
+    safe_input_scale = _pad_vector(
+        safe_input_scale,
+        padded_in_features,
+        fill_value=1.0,
+    ).reshape(groups_per_row, quantized.group_size)
+
+    if diagonal is None:
+        diagonal_weights = torch.ones(weight.shape[1], device=device, dtype=torch.float32)
+    else:
+        diagonal_weights = diagonal.detach().to(device=device, dtype=torch.float32).clamp_min(0)
+    diagonal_weights = _pad_vector(
+        diagonal_weights,
+        padded_in_features,
+        fill_value=0.0 if pad else 1.0,
+    ).reshape(groups_per_row, quantized.group_size)
+
+    grouped_basis = None
+    if basis is not None and basis.numel() > 0 and low_rank_weight > 0:
+        basis_work = basis.detach().to(device=device, dtype=torch.float32)
+        if basis_work.ndim != 2 or basis_work.shape[0] != weight.shape[1]:
+            raise ValueError("basis must have shape [input_channels, rank]")
+        if pad:
+            basis_work = torch.nn.functional.pad(basis_work, (0, 0, 0, pad))
+        grouped_basis = basis_work.reshape(
+            groups_per_row,
+            quantized.group_size,
+            basis_work.shape[1],
+        )
+
+    qmin = -(2 ** (quantized.bits - 1))
+    qmax = 2 ** (quantized.bits - 1) - 1
+    valid_mask = torch.ones(
+        padded_in_features,
+        device=device,
+        dtype=torch.float32,
+    )
+    if pad:
+        valid_mask[-pad:] = 0
+    grouped_valid_mask = valid_mask.reshape(groups_per_row, quantized.group_size)
+
+    for _ in range(steps):
+        scales = _fit_symmetric_group_scales(
+            grouped_weight,
+            grouped_qweight,
+            safe_input_scale,
+            diagonal_weights,
+            grouped_basis,
+            low_rank_weight=low_rank_weight,
+        )
+        scaled_target = grouped_weight * safe_input_scale.unsqueeze(0)
+        grouped_qweight = torch.round(
+            scaled_target / scales.unsqueeze(-1)
+        ).clamp(qmin, qmax)
+        grouped_qweight = grouped_qweight * grouped_valid_mask.unsqueeze(0)
+
+    scales = _fit_symmetric_group_scales(
+        grouped_weight,
+        grouped_qweight,
+        safe_input_scale,
+        diagonal_weights,
+        grouped_basis,
+        low_rank_weight=low_rank_weight,
+    )
+    flat_qweight = grouped_qweight.reshape(out_features, padded_in_features)
+    if pad:
+        flat_qweight = flat_qweight[:, :-pad]
+
+    return QuantizedTensor(
+        qweight=flat_qweight.to(torch.int16),
+        scale=scales.detach().cpu(),
+        zero_point=None,
+        bits=quantized.bits,
+        group_size=quantized.group_size,
+        original_shape=quantized.original_shape,
+        symmetric=True,
+    )
+
+
+def _fit_symmetric_group_scales(
+    grouped_weight: torch.Tensor,
+    grouped_qweight: torch.Tensor,
+    grouped_input_scale: torch.Tensor,
+    grouped_diagonal: torch.Tensor,
+    grouped_basis: torch.Tensor | None,
+    *,
+    low_rank_weight: float,
+) -> torch.Tensor:
+    dequant_vectors = grouped_qweight / grouped_input_scale.unsqueeze(0)
+    diagonal = grouped_diagonal.unsqueeze(0)
+    numerator = (diagonal * dequant_vectors * grouped_weight).sum(dim=-1)
+    denominator = (diagonal * dequant_vectors.square()).sum(dim=-1)
+
+    if grouped_basis is not None and low_rank_weight > 0:
+        vector_projection = torch.einsum(
+            "ogc,gcr->ogr",
+            dequant_vectors,
+            grouped_basis,
+        )
+        weight_projection = torch.einsum(
+            "ogc,gcr->ogr",
+            grouped_weight,
+            grouped_basis,
+        )
+        numerator = numerator + low_rank_weight * (
+            vector_projection * weight_projection
+        ).sum(dim=-1)
+        denominator = denominator + low_rank_weight * vector_projection.square().sum(
+            dim=-1
+        )
+
+    return (numerator / denominator.clamp_min(1e-12)).clamp_min(1e-8)
+
+
+def _pad_vector(
+    values: torch.Tensor,
+    target_length: int,
+    *,
+    fill_value: float,
+) -> torch.Tensor:
+    if values.ndim != 1:
+        raise ValueError("expected a one-dimensional input-channel vector")
+    if values.shape[0] > target_length:
+        raise ValueError("input-channel vector is longer than the padded weight")
+    if values.shape[0] == target_length:
+        return values
+    return torch.nn.functional.pad(
+        values,
+        (0, target_length - values.shape[0]),
+        value=fill_value,
+    )
+
+
 def dequantize_weight_with_input_scale(
     quantized: QuantizedTensor,
     *,
@@ -175,6 +348,44 @@ def fake_quantize_weight(
         symmetric=symmetric,
         clip_ratio=clip_ratio,
         input_scale=input_scale,
+    )
+    return dequantize_weight_with_input_scale(
+        quantized,
+        input_scale=input_scale,
+        device=weight.device,
+        dtype=weight.dtype,
+    )
+
+
+def fake_quantize_weight_with_sketch_refinement(
+    weight: torch.Tensor,
+    *,
+    bits: int,
+    group_size: int,
+    symmetric: bool,
+    clip_ratio: float,
+    input_scale: torch.Tensor | None = None,
+    diagonal: torch.Tensor | None = None,
+    basis: torch.Tensor | None = None,
+    low_rank_weight: float = 0.15,
+    refinement_steps: int = 3,
+) -> torch.Tensor:
+    quantized = quantize_weight_with_input_scale(
+        weight,
+        bits=bits,
+        group_size=group_size,
+        symmetric=symmetric,
+        clip_ratio=clip_ratio,
+        input_scale=input_scale,
+    )
+    quantized = refine_quantized_scales(
+        weight,
+        quantized,
+        input_scale=input_scale,
+        diagonal=diagonal,
+        basis=basis,
+        low_rank_weight=low_rank_weight,
+        steps=refinement_steps,
     )
     return dequantize_weight_with_input_scale(
         quantized,

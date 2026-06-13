@@ -14,7 +14,10 @@ from sketchawq.quant.outliers import (
     apply_outlier_scaling,
     select_outlier_channels,
 )
-from sketchawq.quant.quantizer import fake_quantize_weight
+from sketchawq.quant.quantizer import (
+    fake_quantize_weight,
+    fake_quantize_weight_with_sketch_refinement,
+)
 
 
 @dataclass(frozen=True, slots=True)
@@ -103,13 +106,13 @@ def search_awq_scale_and_clip(
         )
         scales = apply_outlier_scaling(scales, outlier_selection, outlier_config)
         for clip_ratio in quant_config.clip_candidates:
-            candidate = fake_quantize_weight(
+            candidate = _fake_quantize_candidate(
                 weight,
-                bits=quant_config.bits,
-                group_size=quant_config.group_size,
-                symmetric=quant_config.symmetric,
+                scales=scales,
                 clip_ratio=clip_ratio,
-                input_scale=scales,
+                sketch=sketch,
+                quant_config=quant_config,
+                sketch_config=sketch_config,
             )
             candidate = apply_outlier_policy_to_candidate(
                 weight,
@@ -170,13 +173,13 @@ def search_awq_scales(
             max_scale=quant_config.awq_max_scale,
         )
         scales = apply_outlier_scaling(scales, outlier_selection, outlier_config)
-        candidate = fake_quantize_weight(
+        candidate = _fake_quantize_candidate(
             weight,
-            bits=quant_config.bits,
-            group_size=quant_config.group_size,
-            symmetric=quant_config.symmetric,
+            scales=scales,
             clip_ratio=1.0,
-            input_scale=scales,
+            sketch=sketch,
+            quant_config=quant_config,
+            sketch_config=sketch_config,
         )
         candidate = apply_outlier_policy_to_candidate(
             weight,
@@ -198,6 +201,38 @@ def search_awq_scales(
     if best is None:
         raise RuntimeError("No AWQ scale candidates were evaluated.")
     return best
+
+
+def _fake_quantize_candidate(
+    weight: torch.Tensor,
+    *,
+    scales: torch.Tensor,
+    clip_ratio: float,
+    sketch: HessianSketch,
+    quant_config: QuantizationConfig,
+    sketch_config: SketchConfig,
+) -> torch.Tensor:
+    if quant_config.scale_refinement == "sketch":
+        return fake_quantize_weight_with_sketch_refinement(
+            weight,
+            bits=quant_config.bits,
+            group_size=quant_config.group_size,
+            symmetric=quant_config.symmetric,
+            clip_ratio=clip_ratio,
+            input_scale=scales,
+            diagonal=sketch.diagonal,
+            basis=sketch.basis,
+            low_rank_weight=sketch_config.low_rank_weight,
+            refinement_steps=quant_config.scale_refinement_steps,
+        )
+    return fake_quantize_weight(
+        weight,
+        bits=quant_config.bits,
+        group_size=quant_config.group_size,
+        symmetric=quant_config.symmetric,
+        clip_ratio=clip_ratio,
+        input_scale=scales,
+    )
 
 
 def make_awq_scales(

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import pytest
 import torch
 
 from sketchawq.config import QuantizationConfig, SketchConfig
@@ -234,3 +235,65 @@ def test_awq_scale_search_passes_configured_scale_bounds(monkeypatch) -> None:
     )
 
     assert calls == [(0.125, 8.0), (0.125, 8.0)]
+
+
+def test_search_uses_sketch_conditioned_scale_refinement(monkeypatch) -> None:
+    calls: list[int] = []
+
+    def fake_refined_quantize(
+        weight: torch.Tensor,
+        *,
+        bits: int,
+        group_size: int,
+        symmetric: bool,
+        clip_ratio: float,
+        input_scale: torch.Tensor | None,
+        diagonal: torch.Tensor | None,
+        basis: torch.Tensor | None,
+        low_rank_weight: float,
+        refinement_steps: int,
+    ) -> torch.Tensor:
+        del (
+            bits,
+            group_size,
+            symmetric,
+            clip_ratio,
+            input_scale,
+            diagonal,
+            basis,
+            low_rank_weight,
+        )
+        calls.append(refinement_steps)
+        return weight.clone()
+
+    monkeypatch.setattr(
+        awq_scale_search,
+        "fake_quantize_weight_with_sketch_refinement",
+        fake_refined_quantize,
+    )
+
+    config = QuantizationConfig(
+        awq_alpha_candidates=[0.0],
+        clip_candidates=[1.0],
+        scale_refinement="sketch",
+        scale_refinement_steps=3,
+    )
+    search_awq_scale_and_clip(
+        torch.ones(1, 2),
+        torch.ones(2),
+        HessianSketch(diagonal=torch.ones(2), basis=None, rank=0, mode="diagonal"),
+        config,
+        SketchConfig(enabled=True, mode="diagonal", rank=0),
+    )
+
+    assert calls == [3]
+
+
+def test_sketch_scale_refinement_requires_positive_steps() -> None:
+    config = QuantizationConfig(
+        scale_refinement="sketch",
+        scale_refinement_steps=0,
+    )
+
+    with pytest.raises(ValueError, match="scale_refinement_steps"):
+        config.validate()

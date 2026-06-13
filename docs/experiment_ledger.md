@@ -540,6 +540,35 @@ Next action:
 - Build the layer failure map from `layer_metrics.csv` and select one narrow
   budgeted W4 rescue experiment.
 
+### 2026-06-13 - Strict-Budget Scale Refinement Implemented
+
+Status:
+- Awaiting Qwen3-4B GPU A/B results.
+
+Git:
+- Branch: `codex/sketch-conditioned-refinement`
+- Base commit: `255a6a2`
+
+Change:
+- Added opt-in sketch-conditioned group-scale refinement.
+- Added strict g128 W3/W4 controls with no protected FP16 channels.
+- Added run and sync scripts for the four-row control/refinement matrix.
+- Added `scale_refinement` and `scale_refinement_steps` to summary and layer
+  metrics.
+
+Decision rule:
+- Reject if either treatment loses to its same-bit control or spends more
+  effective bits per weight.
+- Confirm a positive result with an alternate seed, Qwen3-8B, and one non-Qwen
+  family before changing canonical paper configs.
+
+Commands:
+- `scripts/run_strict_budget_ablation.sh both --variant both --gpu A100`
+- `scripts/sync_strict_budget_ablation.sh both`
+
+Protocol:
+- `docs/strict_budget_scale_refinement.md`
+
 ### 2026-05-18 - Inference Benchmark Harness Added
 
 Status:

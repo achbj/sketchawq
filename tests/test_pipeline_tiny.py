@@ -135,3 +135,34 @@ def test_pipeline_reports_protected_outlier_channels() -> None:
     assert report.layers
     assert all(layer.outlier_strategy == "protect" for layer in report.layers)
     assert any(layer.protected_channels > 0 for layer in report.layers)
+
+
+def test_pipeline_labels_and_reports_sketch_scale_refinement() -> None:
+    model = GPT2LMHeadModel(
+        GPT2Config(
+            vocab_size=32,
+            n_positions=16,
+            n_embd=16,
+            n_layer=1,
+            n_head=2,
+            n_inner=32,
+        )
+    )
+    input_ids = torch.randint(0, 32, (1, 16))
+    batch = CalibrationBatch(input_ids=input_ids, attention_mask=torch.ones_like(input_ids))
+    config = SketchAWQConfig()
+    config.quantization.bits = 4
+    config.quantization.group_size = 8
+    config.quantization.scale_refinement = "sketch"
+    config.quantization.scale_refinement_steps = 2
+    config.sketch.rank = 2
+    config.sketch.max_rows_per_batch = 8
+    config.evaluation.enabled = False
+    config.output.save_model = False
+
+    report = quantize_model(model, [batch], config)
+
+    assert "scale-refine" in report.method
+    assert report.layers
+    assert {layer.scale_refinement for layer in report.layers} == {"sketch"}
+    assert {layer.scale_refinement_steps for layer in report.layers} == {2}

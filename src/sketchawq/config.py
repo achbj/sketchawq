@@ -37,6 +37,15 @@ SEARCH_OBJECTIVE_ALIASES = {
     "output_aware": "output_error",
     "activation_output": "output_error",
 }
+SCALE_REFINEMENT_MODES = {"none", "sketch"}
+SCALE_REFINEMENT_ALIASES = {
+    "off": "none",
+    "disabled": "none",
+    "false": "none",
+    "hessian": "sketch",
+    "curvature": "sketch",
+    "sketch_conditioned": "sketch",
+}
 ROW_SAMPLING_MODES = {"random", "linspace"}
 ROW_SAMPLING_ALIASES = {
     "seeded_random": "random",
@@ -100,6 +109,8 @@ class QuantizationConfig:
     output_error_rows: int = 0
     output_error_weight: float = 1.0
     hessian_error_weight: float = 1.0
+    scale_refinement: str = "none"
+    scale_refinement_steps: int = 3
 
     def validate(self) -> None:
         if self.bits not in {2, 3, 4, 8}:
@@ -145,6 +156,25 @@ class QuantizationConfig:
             raise ValueError("output_error_weight must be non-negative")
         if self.hessian_error_weight < 0:
             raise ValueError("hessian_error_weight must be non-negative")
+        self.scale_refinement = self.scale_refinement.strip().lower().replace("-", "_")
+        self.scale_refinement = SCALE_REFINEMENT_ALIASES.get(
+            self.scale_refinement,
+            self.scale_refinement,
+        )
+        if self.scale_refinement not in SCALE_REFINEMENT_MODES:
+            allowed = ", ".join(sorted(SCALE_REFINEMENT_MODES))
+            raise ValueError(f"scale_refinement must be one of {allowed}")
+        if self.scale_refinement_steps < 0:
+            raise ValueError("scale_refinement_steps must be non-negative")
+        if self.scale_refinement == "sketch":
+            if self.scale_refinement_steps <= 0:
+                raise ValueError(
+                    "scale_refinement_steps must be positive for sketch refinement"
+                )
+            if not self.symmetric:
+                raise ValueError(
+                    "sketch scale refinement currently requires symmetric quantization"
+                )
 
 
 @dataclass(slots=True)
