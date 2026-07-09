@@ -66,6 +66,15 @@ SCALE_REFINEMENT_GUARD_ALIASES = {
     "output": "holdout_output",
     "output_aware": "holdout_output",
 }
+ERROR_COMPENSATION_MODES = {"none", "sequential_sketch"}
+ERROR_COMPENSATION_ALIASES = {
+    "off": "none",
+    "disabled": "none",
+    "false": "none",
+    "sequential": "sequential_sketch",
+    "blockwise": "sequential_sketch",
+    "gptq_style": "sequential_sketch",
+}
 TIED_WEIGHT_STRATEGIES = {"joint_embedding", "output_only"}
 TIED_WEIGHT_STRATEGY_ALIASES = {
     "joint": "joint_embedding",
@@ -139,6 +148,7 @@ class QuantizationConfig:
     scale_refinement: str = "none"
     scale_refinement_steps: int = 3
     scale_refinement_guard: str = "none"
+    error_compensation: str = "none"
     tied_weight_strategy: str = "joint_embedding"
     tied_embedding_error_weight: float = 1.0
 
@@ -221,6 +231,23 @@ class QuantizationConfig:
             if self.output_error_rows <= 0:
                 raise ValueError(
                     "output_error_rows must be positive for a scale_refinement_guard"
+                )
+        self.error_compensation = self.error_compensation.strip().lower().replace("-", "_")
+        self.error_compensation = ERROR_COMPENSATION_ALIASES.get(
+            self.error_compensation,
+            self.error_compensation,
+        )
+        if self.error_compensation not in ERROR_COMPENSATION_MODES:
+            allowed = ", ".join(sorted(ERROR_COMPENSATION_MODES))
+            raise ValueError(f"error_compensation must be one of {allowed}")
+        if self.error_compensation != "none":
+            if self.scale_refinement != "sketch":
+                raise ValueError(
+                    "sequential_sketch error_compensation requires sketch scale_refinement"
+                )
+            if not self.symmetric:
+                raise ValueError(
+                    "sequential_sketch error_compensation currently requires symmetric quantization"
                 )
         self.tied_weight_strategy = self.tied_weight_strategy.strip().lower().replace("-", "_")
         self.tied_weight_strategy = TIED_WEIGHT_STRATEGY_ALIASES.get(
@@ -532,6 +559,11 @@ class SketchAWQConfig:
         self.quantization.validate()
         self.outliers.validate()
         self.sketch.validate()
+        if self.quantization.error_compensation == "sequential_sketch":
+            if not self.sketch.uses_low_rank() or self.sketch.effective_rank() <= 0:
+                raise ValueError(
+                    "sequential_sketch error_compensation requires a positive low-rank sketch"
+                )
         self.adaptive.validate()
         if (
             self.adaptive.enabled

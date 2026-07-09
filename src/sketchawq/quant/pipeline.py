@@ -13,6 +13,7 @@ from sketchawq.models.layers import iter_named_linears
 from sketchawq.models.tied import TiedLinearWeight, find_tied_linear_weights
 from sketchawq.quant.adaptive import LayerAdaptiveInput, build_layer_adaptive_plans
 from sketchawq.quant.awq_scale_search import search_awq_scale_and_clip
+from sketchawq.quant.error_compensation import sequentially_compensate_quantized_weight
 from sketchawq.quant.hessian_sketch import build_hessian_sketch
 from sketchawq.quant.observer import LayerStats, collect_layer_stats_with_summary
 from sketchawq.quant.outliers import (
@@ -51,6 +52,9 @@ class LayerQuantizationSummary:
     scale_refinement: str
     scale_refinement_steps: int
     scale_refinement_guard: str
+    error_compensation: str
+    error_compensation_blocks: int
+    error_compensation_updated_blocks: int
     holdout_baseline_score: float | None
     holdout_refined_score: float | None
     holdout_refinement_accepted: bool | None
@@ -294,6 +298,7 @@ def quantize_model(
         )
         baseline_quantized = quantized
         holdout_selection = None
+        compensation_result = None
         if effective_quant_config.scale_refinement == "sketch":
             quantized = refine_quantized_scales(
                 weight,
@@ -315,6 +320,18 @@ def quantize_model(
                 low_rank_weight=config.sketch.low_rank_weight,
                 steps=effective_quant_config.scale_refinement_steps,
             )
+        if effective_quant_config.error_compensation == "sequential_sketch":
+            compensation_result = sequentially_compensate_quantized_weight(
+                weight,
+                quantized,
+                input_scale=search_result.scales,
+                diagonal=sketch.curvature_diagonal,
+                factor=sketch.factor,
+                basis=sketch.basis,
+                low_rank_weight=config.sketch.low_rank_weight,
+                refinement_steps=effective_quant_config.scale_refinement_steps,
+            )
+            quantized = compensation_result.quantized
         if effective_quant_config.scale_refinement_guard == "holdout_output":
             if selection_stats_result is None:
                 raise RuntimeError("missing held-out activation statistics")
@@ -425,6 +442,13 @@ def quantize_model(
                 scale_refinement=effective_quant_config.scale_refinement,
                 scale_refinement_steps=effective_quant_config.scale_refinement_steps,
                 scale_refinement_guard=effective_quant_config.scale_refinement_guard,
+                error_compensation=effective_quant_config.error_compensation,
+                error_compensation_blocks=(
+                    0 if compensation_result is None else compensation_result.block_count
+                ),
+                error_compensation_updated_blocks=(
+                    0 if compensation_result is None else compensation_result.updated_block_count
+                ),
                 holdout_baseline_score=(
                     None if holdout_selection is None else holdout_selection.baseline.total
                 ),
@@ -603,6 +627,9 @@ def _method_label(
     if config.quantization.scale_refinement_guard == "holdout_output":
         label = _without_method_version(label)
         label = f"{label}-holdout-output-guard-v0"
+    if config.quantization.error_compensation == "sequential_sketch":
+        label = _without_method_version(label)
+        label = f"{label}-sequential-compensate-v0"
     if config.outliers.active():
         label = _without_method_version(label)
         label = f"{label}-outlier-{config.outliers.strategy}-v0"
