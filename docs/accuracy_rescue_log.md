@@ -200,3 +200,44 @@ Decision:
 
 Artifact:
 - `artifacts/strict_budget/qwen3_4b_strict_budget_20260613_234319`
+
+## 2026-07-09 - Spectrum-Aware Curvature Search
+
+Status:
+- Qwen3-4B development component retained; not promoted.
+
+Hypothesis:
+- Preserve the low-rank curvature spectrum with a Nystrom factor instead of
+  using an orthonormal subspace plus a manual scalar.
+
+Guardrails:
+- Fixed W3/W4 g128 protocol, no protected channels, no smaller groups, and no
+  new packed tensors.
+- C4 calibration and WikiText2 evaluation stay separated.
+- The factor threshold and candidate grids are frozen before final evaluation.
+
+Invalidated run:
+- `artifacts/spectrum_curvature/qwen3_4b_spectrum_curvature_20260709_194600`
+- The initial factor loss double-counted the full diagonal. Preserve the run as
+  a smoke-test record only; do not use its PPL values.
+
+Valid artifact:
+- `artifacts/spectrum_curvature/qwen3_4b_spectrum_curvature_20260709_195700`
+
+Results:
+- W3 PPL improved from 39.9267 to 39.0111.
+- W4 PPL improved from 19.9803 to 18.0479.
+- These are useful same-protocol gains, but they do not approach the W3 target
+  or outperform strict scale refinement.
+
+Decision:
+- Retain the Nystrom residual factor as a component.
+- Next test: globally coupled scale refinement using the same factor, with no
+  evaluation-set tuning and a fresh run name.
+
+Commands:
+
+```bash
+scripts/run_spectrum_curvature_ablation.sh both --gpu A100
+scripts/sync_spectrum_curvature_ablation.sh both
+```

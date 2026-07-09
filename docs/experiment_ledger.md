@@ -840,3 +840,26 @@ Decision:
 Next action:
 - 
 ```
+
+### 2026-07-09 - Spectrum-Aware Curvature Search
+
+Status:
+- Done as a development component; not promoted.
+
+Evidence:
+- Valid bundle:
+  `artifacts/spectrum_curvature/qwen3_4b_spectrum_curvature_20260709_195700`
+- W3 PPL: 39.9267 strict control to 39.0111 Nystrom residual.
+- W4 PPL: 19.9803 strict control to 18.0479 Nystrom residual.
+- Invalidated pre-fix bundle retained at:
+  `artifacts/spectrum_curvature/qwen3_4b_spectrum_curvature_20260709_194600`
+
+Decision:
+- Keep the spectrum factor as an opt-in component and preserve the invalidated
+  run for auditability.
+- Do not promote the result without a stronger W3 mechanism and cross-model
+  confirmation.
+
+Next action:
+- Replace independent low-rank group-scale fitting with a globally coupled
+  residual update, then rerun W3 and W4 under the same fixed protocol.
