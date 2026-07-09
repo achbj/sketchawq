@@ -10,6 +10,7 @@ from sketchawq.quant.quantizer import (
     quantize_groupwise,
     quantize_weight_with_input_scale,
     refine_quantized_scales,
+    refine_quantized_scales_globally,
 )
 
 
@@ -106,6 +107,59 @@ def test_sketch_refined_fake_quantization_uses_input_scale_and_low_rank_basis() 
 
     assert candidate.shape == weight.shape
     assert torch.isfinite(candidate).all()
+
+
+def test_global_scale_refinement_reduces_coupled_factor_error_without_extra_storage() -> None:
+    torch.manual_seed(0)
+    weight = torch.randn(3, 8) * torch.tensor([1.0, 2.0, 0.5, 3.0, 1.5, 0.8, 2.5, 0.7])
+    factor = torch.tensor(
+        [
+            [1.0, 0.2],
+            [0.4, 0.1],
+            [0.2, 1.0],
+            [0.1, 0.5],
+            [1.0, 0.3],
+            [0.3, 0.8],
+            [0.7, 0.2],
+            [0.2, 0.6],
+        ]
+    )
+    initial = quantize_weight_with_input_scale(
+        weight,
+        bits=3,
+        group_size=2,
+        symmetric=True,
+        clip_ratio=0.85,
+    )
+
+    refined = refine_quantized_scales_globally(
+        weight,
+        initial,
+        diagonal=torch.ones(weight.shape[1]),
+        factor=factor,
+        steps=3,
+    )
+
+    initial_score = weighted_error_score(
+        weight,
+        initial.dequantize(),
+        diagonal=torch.ones(weight.shape[1]),
+        factor=factor,
+        normalize_terms=False,
+    )
+    refined_score = weighted_error_score(
+        weight,
+        refined.dequantize(),
+        diagonal=torch.ones(weight.shape[1]),
+        factor=factor,
+        normalize_terms=False,
+    )
+
+    assert refined_score < initial_score
+    assert refined.bits == initial.bits
+    assert refined.group_size == initial.group_size
+    assert refined.qweight.shape == initial.qweight.shape
+    assert refined.scale.shape == initial.scale.shape
 
 
 def test_zero_refinement_steps_preserve_the_original_quantized_tensor() -> None:

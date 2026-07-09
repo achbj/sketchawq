@@ -322,3 +322,13 @@ def test_sketch_scale_refinement_requires_positive_steps() -> None:
 
     with pytest.raises(ValueError, match="scale_refinement_steps"):
         config.validate()
+
+
+def test_global_sketch_scale_refinement_requires_positive_steps() -> None:
+    config = QuantizationConfig(
+        scale_refinement="global_sketch",
+        scale_refinement_steps=0,
+    )
+
+    with pytest.raises(ValueError, match="scale_refinement_steps"):
+        config.validate()

@@ -44,7 +44,7 @@ SEARCH_OBJECTIVE_ALIASES = {
     "output_aware": "output_error",
     "activation_output": "output_error",
 }
-SCALE_REFINEMENT_MODES = {"none", "sketch"}
+SCALE_REFINEMENT_MODES = {"none", "sketch", "global_sketch"}
 SCALE_REFINEMENT_ALIASES = {
     "off": "none",
     "disabled": "none",
@@ -52,6 +52,10 @@ SCALE_REFINEMENT_ALIASES = {
     "hessian": "sketch",
     "curvature": "sketch",
     "sketch_conditioned": "sketch",
+    "global": "global_sketch",
+    "global_curvature": "global_sketch",
+    "coupled": "global_sketch",
+    "coupled_sketch": "global_sketch",
 }
 TIED_WEIGHT_STRATEGIES = {"joint_embedding", "output_only"}
 TIED_WEIGHT_STRATEGY_ALIASES = {
@@ -182,14 +186,14 @@ class QuantizationConfig:
             raise ValueError(f"scale_refinement must be one of {allowed}")
         if self.scale_refinement_steps < 0:
             raise ValueError("scale_refinement_steps must be non-negative")
-        if self.scale_refinement == "sketch":
+        if self.scale_refinement in {"sketch", "global_sketch"}:
             if self.scale_refinement_steps <= 0:
                 raise ValueError(
-                    "scale_refinement_steps must be positive for sketch refinement"
+                    "scale_refinement_steps must be positive for sketch-based refinement"
                 )
             if not self.symmetric:
                 raise ValueError(
-                    "sketch scale refinement currently requires symmetric quantization"
+                    "sketch-based scale refinement currently requires symmetric quantization"
                 )
         self.tied_weight_strategy = self.tied_weight_strategy.strip().lower().replace("-", "_")
         self.tied_weight_strategy = TIED_WEIGHT_STRATEGY_ALIASES.get(

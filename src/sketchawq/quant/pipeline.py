@@ -24,6 +24,7 @@ from sketchawq.quant.quantizer import (
     dequantize_weight_with_input_scale,
     quantize_weight_with_input_scale,
     refine_quantized_scales,
+    refine_quantized_scales_globally,
 )
 
 LOGGER = logging.getLogger(__name__)
@@ -264,6 +265,17 @@ def quantize_model(
                 low_rank_weight=config.sketch.low_rank_weight,
                 steps=effective_quant_config.scale_refinement_steps,
             )
+        elif effective_quant_config.scale_refinement == "global_sketch":
+            quantized = refine_quantized_scales_globally(
+                weight,
+                quantized,
+                input_scale=search_result.scales,
+                diagonal=sketch.curvature_diagonal,
+                factor=sketch.factor,
+                basis=sketch.basis,
+                low_rank_weight=config.sketch.low_rank_weight,
+                steps=effective_quant_config.scale_refinement_steps,
+            )
         quantized_weight = dequantize_weight_with_input_scale(
             quantized,
             input_scale=search_result.scales,
@@ -477,6 +489,9 @@ def _method_label(
     if config.quantization.scale_refinement == "sketch":
         label = _without_method_version(label)
         label = f"{label}-scale-refine-v0"
+    elif config.quantization.scale_refinement == "global_sketch":
+        label = _without_method_version(label)
+        label = f"{label}-global-scale-refine-v1"
     if config.outliers.active():
         label = _without_method_version(label)
         label = f"{label}-outlier-{config.outliers.strategy}-v0"
