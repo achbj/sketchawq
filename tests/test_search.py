@@ -332,3 +332,22 @@ def test_global_sketch_scale_refinement_requires_positive_steps() -> None:
 
     with pytest.raises(ValueError, match="scale_refinement_steps"):
         config.validate()
+
+
+def test_scale_refinement_guard_requires_a_refinement_and_output_rows() -> None:
+    config = QuantizationConfig(
+        scale_refinement_guard="holdout_output",
+        output_error_rows=1,
+    )
+
+    with pytest.raises(ValueError, match="requires scale_refinement"):
+        config.validate()
+
+    config = QuantizationConfig(
+        scale_refinement="sketch",
+        scale_refinement_guard="holdout_output",
+        output_error_rows=0,
+    )
+
+    with pytest.raises(ValueError, match="output_error_rows"):
+        config.validate()

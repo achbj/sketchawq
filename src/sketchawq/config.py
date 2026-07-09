@@ -57,6 +57,15 @@ SCALE_REFINEMENT_ALIASES = {
     "coupled": "global_sketch",
     "coupled_sketch": "global_sketch",
 }
+SCALE_REFINEMENT_GUARD_MODES = {"none", "holdout_output"}
+SCALE_REFINEMENT_GUARD_ALIASES = {
+    "off": "none",
+    "disabled": "none",
+    "false": "none",
+    "holdout": "holdout_output",
+    "output": "holdout_output",
+    "output_aware": "holdout_output",
+}
 TIED_WEIGHT_STRATEGIES = {"joint_embedding", "output_only"}
 TIED_WEIGHT_STRATEGY_ALIASES = {
     "joint": "joint_embedding",
@@ -129,6 +138,7 @@ class QuantizationConfig:
     hessian_error_weight: float = 1.0
     scale_refinement: str = "none"
     scale_refinement_steps: int = 3
+    scale_refinement_guard: str = "none"
     tied_weight_strategy: str = "joint_embedding"
     tied_embedding_error_weight: float = 1.0
 
@@ -194,6 +204,23 @@ class QuantizationConfig:
             if not self.symmetric:
                 raise ValueError(
                     "sketch-based scale refinement currently requires symmetric quantization"
+                )
+        self.scale_refinement_guard = (
+            self.scale_refinement_guard.strip().lower().replace("-", "_")
+        )
+        self.scale_refinement_guard = SCALE_REFINEMENT_GUARD_ALIASES.get(
+            self.scale_refinement_guard,
+            self.scale_refinement_guard,
+        )
+        if self.scale_refinement_guard not in SCALE_REFINEMENT_GUARD_MODES:
+            allowed = ", ".join(sorted(SCALE_REFINEMENT_GUARD_MODES))
+            raise ValueError(f"scale_refinement_guard must be one of {allowed}")
+        if self.scale_refinement_guard != "none":
+            if self.scale_refinement == "none":
+                raise ValueError("scale_refinement_guard requires scale_refinement")
+            if self.output_error_rows <= 0:
+                raise ValueError(
+                    "output_error_rows must be positive for a scale_refinement_guard"
                 )
         self.tied_weight_strategy = self.tied_weight_strategy.strip().lower().replace("-", "_")
         self.tied_weight_strategy = TIED_WEIGHT_STRATEGY_ALIASES.get(
@@ -489,6 +516,13 @@ class SketchAWQConfig:
                 "adaptive sensitive_group_size must be <= quantization.group_size"
             )
         self.calibration.validate()
+        if (
+            self.quantization.scale_refinement_guard == "holdout_output"
+            and self.calibration.holdout_samples <= 0
+        ):
+            raise ValueError(
+                "calibration.holdout_samples must be positive for holdout_output refinement guard"
+            )
         self.evaluation.validate()
 
 

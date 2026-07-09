@@ -3,7 +3,7 @@ from __future__ import annotations
 import pytest
 import torch
 
-from sketchawq.config import CalibrationConfig, load_config
+from sketchawq.config import CalibrationConfig, SketchAWQConfig, load_config
 from sketchawq.data import calibration
 from sketchawq.data.calibration import (
     TextBatchConfig,
@@ -198,6 +198,20 @@ def test_calibration_holdout_requires_a_distinct_dataset_split() -> None:
 
     with pytest.raises(ValueError, match="holdout_split must differ"):
         config.validate()
+
+
+def test_holdout_output_guard_requires_holdout_calibration_samples() -> None:
+    config = SketchAWQConfig()
+    config.quantization.scale_refinement = "sketch"
+    config.quantization.output_error_rows = 1
+    config.quantization.scale_refinement_guard = "holdout_output"
+
+    with pytest.raises(ValueError, match="holdout_samples"):
+        config.validate()
+
+    config.calibration.holdout_samples = 1
+    config.calibration.holdout_split = "validation"
+    config.validate()
 
 
 def test_packed_calibration_builds_full_chunks_without_padding(monkeypatch) -> None:
