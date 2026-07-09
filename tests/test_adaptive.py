@@ -107,7 +107,8 @@ def test_pipeline_applies_adaptive_group_size_and_reports_effective_fraction() -
 
     report = quantize_model(model, [batch], config)
 
-    assert report.method.endswith("-adaptive-v0")
+    assert "-adaptive" in report.method
+    assert report.method.endswith("-tied-embedding-v1")
     assert report.layers
     assert all(layer.group_size == 4 for layer in report.layers)
     assert all(0.125 <= layer.outlier_fraction <= 0.5 for layer in report.layers)
