@@ -1,6 +1,6 @@
 # Strict-Budget Scale Refinement Experiment
 
-Status: implemented, awaiting GPU results
+Status: Qwen3-4B development test passed; confirmation pending
 
 Date: 2026-06-13
 
@@ -13,7 +13,8 @@ Base commit: `255a6a2`
 Nominal bit width is not enough for a SOTA claim. Several earlier SketchAWQ
 rows used FP16 protected channels or smaller groups:
 
-- Qwen3-4B W3 g128 reported about 4.11 effective bits per weight.
+- Qwen3-4B W3 g128 with protected channels used about 3.89 effective bits per
+  weight. Its reported 4.11 value was compression ratio, not effective bpw.
 - Llama-2-7B W4 g32 with protected channels reported about 5.64 effective bits
   per weight.
 
@@ -104,6 +105,48 @@ Advance it to confirmation only when:
 Do not tune the refinement step count or low-rank weight on final WikiText2
 results. If the mechanism is promising, choose those values using a development
 split and freeze them before confirmation.
+
+## Qwen3-4B Development Result
+
+Artifact:
+
+`artifacts/strict_budget/qwen3_4b_strict_budget_20260613_234319`
+
+| Bits | Variant | Effective bpw | PPL | PPL vs FP16 | Quantization | Peak CUDA |
+| ---: | --- | ---: | ---: | ---: | ---: | ---: |
+| 3 | control | 3.25 | 39.9267 | +24.5506 | 56.54s | 15.97 GB |
+| 3 | refinement | 3.25 | 27.1889 | +11.8129 | 76.99s | 20.64 GB |
+| 4 | control | 4.25 | 19.9803 | +4.6042 | 54.99s | 15.97 GB |
+| 4 | refinement | 4.25 | 16.8022 | +1.4262 | 76.20s | 20.64 GB |
+
+FP16 PPL was 15.3760 in all four rows.
+
+Observed effect:
+
+- W3 PPL fell by 12.7377, a 31.9% reduction versus the strict control.
+- W4 PPL fell by 3.1780, a 15.9% reduction versus the strict control.
+- Effective bpw was exactly unchanged within each bit width.
+- Quantization time increased by about 36-39%, while remaining around 11x
+  faster than the existing Qwen3-4B GPTQ A100 rows.
+- Peak CUDA allocation increased by about 4.67 GB.
+- The proxy score improved for all 253 layers at both widths. This is expected
+  because refinement directly optimizes that score and is not independent
+  confirmation.
+
+Interpretation:
+
+- The hypothesis passed the Qwen3-4B development gate.
+- W4 is promising: strict 4.25 bpw reaches 16.8022 PPL without protected FP16
+  channels, close to the earlier 16.0957 protected-channel row.
+- W3 remains far from the target: 27.1889 is a large improvement but is not yet
+  near the prior 4-bit quality or competitive GPTQ quality.
+- Do not call this SOTA and do not replace canonical configs yet.
+
+Next confirmation:
+
+1. Repeat the frozen four-row matrix with an alternate calibration seed.
+2. Run frozen control/refinement rows on Qwen3-8B.
+3. Run the same fixed mechanism on OPT-2.7B or Llama/Mistral.
 
 ## Rollback
 

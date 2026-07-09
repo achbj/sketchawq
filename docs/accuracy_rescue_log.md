@@ -165,7 +165,7 @@ names.
 ## 2026-06-13 - Strict-Budget Sketch-Conditioned Scale Refinement
 
 Status:
-- Implemented, awaiting GPU results.
+- Qwen3-4B development gate passed; confirmation pending.
 
 Git:
 - Base commit: `255a6a2`
@@ -193,5 +193,10 @@ Detailed protocol:
 - `docs/strict_budget_scale_refinement.md`
 
 Decision:
-- Do not modify canonical paper configs until the controlled experiment passes
-  its promotion rule.
+- Refinement reduced strict W3 PPL from 39.9267 to 27.1889 and strict W4 PPL
+  from 19.9803 to 16.8022 at unchanged 3.25/4.25 effective bpw.
+- Advance the frozen mechanism to alternate-seed and cross-model confirmation.
+- Do not modify canonical paper configs until those confirmation runs pass.
+
+Artifact:
+- `artifacts/strict_budget/qwen3_4b_strict_budget_20260613_234319`

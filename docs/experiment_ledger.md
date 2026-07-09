@@ -543,7 +543,7 @@ Next action:
 ### 2026-06-13 - Strict-Budget Scale Refinement Implemented
 
 Status:
-- Awaiting Qwen3-4B GPU A/B results.
+- Qwen3-4B development test passed; confirmation pending.
 
 Git:
 - Branch: `codex/sketch-conditioned-refinement`
@@ -561,6 +561,18 @@ Decision rule:
   effective bits per weight.
 - Confirm a positive result with an alternate seed, Qwen3-8B, and one non-Qwen
   family before changing canonical paper configs.
+
+Result:
+- W3: 39.9267 control to 27.1889 refinement at unchanged 3.25 effective bpw.
+- W4: 19.9803 control to 16.8022 refinement at unchanged 4.25 effective bpw.
+- Quantization time rose from about 55-57s to about 76-77s.
+- Peak CUDA allocation rose from 15.97 GB to 20.64 GB.
+- Artifact:
+  `artifacts/strict_budget/qwen3_4b_strict_budget_20260613_234319`
+
+Decision:
+- Advance the frozen mechanism to confirmation.
+- W4 is promising but not yet SOTA; W3 still needs a stronger mechanism.
 
 Commands:
 - `scripts/run_strict_budget_ablation.sh both --variant both --gpu A100`
