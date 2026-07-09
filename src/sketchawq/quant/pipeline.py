@@ -39,6 +39,8 @@ class LayerQuantizationSummary:
     sketch_mode: str
     uses_diagonal: bool
     uses_low_rank: bool
+    low_rank_representation: str
+    uses_spectrum_factor: bool
     scale_clip_search: str
     scale_refinement: str
     scale_refinement_steps: int
@@ -334,7 +336,9 @@ def quantize_model(
                 ),
                 sketch_mode=sketch.mode,
                 uses_diagonal=sketch.diagonal is not None,
-                uses_low_rank=sketch.basis is not None,
+                uses_low_rank=sketch.basis is not None or sketch.factor is not None,
+                low_rank_representation=sketch.low_rank_representation,
+                uses_spectrum_factor=sketch.factor is not None,
                 scale_clip_search=effective_quant_config.scale_clip_search,
                 scale_refinement=effective_quant_config.scale_refinement,
                 scale_refinement_steps=effective_quant_config.scale_refinement_steps,
@@ -466,21 +470,27 @@ def _method_label(
         label = "AWQ-only-v0"
     elif not config.sketch.uses_low_rank():
         label = "SketchAWQ-diagonal-v0"
+    elif config.sketch.low_rank_representation == "nystrom":
+        label = "SketchAWQ-diagonal-nystrom-v1"
     else:
         label = "SketchAWQ-diagonal-low-rank-v0"
     if config.quantization.scale_refinement == "sketch":
-        label = label.removesuffix("-v0")
+        label = _without_method_version(label)
         label = f"{label}-scale-refine-v0"
     if config.outliers.active():
-        label = label.removesuffix("-v0")
+        label = _without_method_version(label)
         label = f"{label}-outlier-{config.outliers.strategy}-v0"
     if config.adaptive.enabled:
-        label = label.removesuffix("-v0")
+        label = _without_method_version(label)
         label = f"{label}-adaptive-v0"
     if uses_tied_embedding_objective:
-        label = label.removesuffix("-v0")
+        label = _without_method_version(label)
         return f"{label}-tied-embedding-v1"
     return label
+
+
+def _without_method_version(label: str) -> str:
+    return label.removesuffix("-v0").removesuffix("-v1")
 
 
 def _tied_embedding_row_weights(

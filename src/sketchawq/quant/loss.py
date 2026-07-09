@@ -9,17 +9,26 @@ def weighted_error_score(
     *,
     diagonal: torch.Tensor | None = None,
     basis: torch.Tensor | None = None,
+    factor: torch.Tensor | None = None,
     low_rank_weight: float = 0.15,
     normalize_terms: bool = True,
 ) -> float:
     """Approximate expected layer-output error from weight reconstruction error.
 
     The diagonal term estimates sum_j H_jj * ||error[:, j]||^2.
-    The low-rank term estimates a small part of error @ H @ error.T using
-    the sketched Hessian basis.
+    A spectrum-aware Nystrom factor represents the low-rank covariance directly.
+    The legacy orthonormal basis remains available for historical reproductions.
     """
     original_float = original.float().detach()
     error = (original_float - candidate.float()).detach()
+    if factor is not None and factor.numel() > 0:
+        return _spectrum_aware_error_score(
+            original_float,
+            error,
+            diagonal=diagonal,
+            factor=factor,
+            normalize_terms=normalize_terms,
+        )
     if diagonal is None:
         base_score = error.pow(2).mean()
         if normalize_terms:
@@ -47,6 +56,45 @@ def weighted_error_score(
         score = score + low_rank_weight * low_rank_score
 
     return float(score.detach().cpu())
+
+
+def _spectrum_aware_error_score(
+    original: torch.Tensor,
+    error: torch.Tensor,
+    *,
+    diagonal: torch.Tensor | None,
+    factor: torch.Tensor,
+    normalize_terms: bool,
+) -> float:
+    factor = factor.detach().to(device=error.device, dtype=error.dtype)
+    if factor.ndim != 2 or factor.shape[0] != error.shape[1]:
+        raise ValueError("factor must have shape [input_channels, rank]")
+    if diagonal is not None:
+        diagonal = diagonal.detach().to(device=error.device, dtype=error.dtype).clamp_min(0)
+        if diagonal.ndim != 1 or diagonal.shape[0] != error.shape[1]:
+            raise ValueError("diagonal must have one value per input channel")
+
+    numerator = _quadratic_curvature_energy(error, diagonal=diagonal, factor=factor)
+    if normalize_terms:
+        denominator = _quadratic_curvature_energy(
+            original,
+            diagonal=diagonal,
+            factor=factor,
+        ).clamp_min(1e-12)
+        numerator = numerator / denominator
+    return float(numerator.detach().cpu())
+
+
+def _quadratic_curvature_energy(
+    values: torch.Tensor,
+    *,
+    diagonal: torch.Tensor | None,
+    factor: torch.Tensor,
+) -> torch.Tensor:
+    energy = (values @ factor).square().sum()
+    if diagonal is not None:
+        energy = energy + (values.square() * diagonal.view(1, -1)).sum()
+    return energy / max(values.shape[0], 1)
 
 
 def output_error_score(

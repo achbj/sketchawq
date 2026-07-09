@@ -93,6 +93,31 @@ def test_weighted_error_score_normalizes_curvature_terms() -> None:
     torch.testing.assert_close(torch.tensor(scaled_score), torch.tensor(score))
 
 
+def test_spectrum_factor_uses_its_observed_curvature_without_manual_weight() -> None:
+    original = torch.zeros(1, 2)
+    factor = torch.tensor([[3.0], [0.0]])
+
+    first_channel = weighted_error_score(
+        original,
+        torch.tensor([[1.0, 0.0]]),
+        diagonal=torch.zeros(2),
+        factor=factor,
+        low_rank_weight=0.0,
+        normalize_terms=False,
+    )
+    second_channel = weighted_error_score(
+        original,
+        torch.tensor([[0.0, 1.0]]),
+        diagonal=torch.zeros(2),
+        factor=factor,
+        low_rank_weight=100.0,
+        normalize_terms=False,
+    )
+
+    assert first_channel == 9.0
+    assert second_channel == 0.0
+
+
 def test_output_error_score_measures_calibration_output_reconstruction() -> None:
     original = torch.tensor([[1.0, 0.0], [0.0, 2.0]])
     candidate = torch.tensor([[0.5, 0.0], [0.0, 2.0]])

@@ -15,6 +15,13 @@ SKETCH_MODE_ALIASES = {
     "diag_low_rank": "diagonal_low_rank",
     "low_rank": "diagonal_low_rank",
 }
+LOW_RANK_REPRESENTATIONS = {"orthonormal", "nystrom"}
+LOW_RANK_REPRESENTATION_ALIASES = {
+    "qr": "orthonormal",
+    "legacy": "orthonormal",
+    "spectrum": "nystrom",
+    "spectrum_aware": "nystrom",
+}
 AWQ_SCALE_NORMALIZATION_MODES = {"geometric_mean", "arithmetic_mean", "none"}
 AWQ_SCALE_NORMALIZATION_ALIASES = {
     "geometric": "geometric_mean",
@@ -259,6 +266,8 @@ class SketchConfig:
     mask_mismatch_action: str = "warn"
     diagonal_floor: float = 1e-6
     low_rank_weight: float = 0.15
+    low_rank_representation: str = "orthonormal"
+    nystrom_eigenvalue_floor: float = 1e-6
     normalize_error_terms: bool = True
 
     def validate(self) -> None:
@@ -285,6 +294,16 @@ class SketchConfig:
             raise ValueError(f"mask_mismatch_action must be one of {allowed}")
         if self.low_rank_weight < 0:
             raise ValueError("low_rank_weight must be non-negative")
+        self.low_rank_representation = self.low_rank_representation.strip().lower().replace("-", "_")
+        self.low_rank_representation = LOW_RANK_REPRESENTATION_ALIASES.get(
+            self.low_rank_representation,
+            self.low_rank_representation,
+        )
+        if self.low_rank_representation not in LOW_RANK_REPRESENTATIONS:
+            allowed = ", ".join(sorted(LOW_RANK_REPRESENTATIONS))
+            raise ValueError(f"low_rank_representation must be one of {allowed}")
+        if not 0.0 < self.nystrom_eigenvalue_floor <= 1.0:
+            raise ValueError("nystrom_eigenvalue_floor must be in (0.0, 1.0]")
 
     def normalized_mode(self) -> str:
         if not self.enabled:

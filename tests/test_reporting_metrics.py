@@ -76,6 +76,8 @@ def test_run_summary_includes_global_storage_estimates() -> None:
     assert row["awq_max_scale"] == config.quantization.awq_max_scale
     assert row["scale_refinement"] == config.quantization.scale_refinement
     assert row["scale_refinement_steps"] == config.quantization.scale_refinement_steps
+    assert row["low_rank_representation"] == config.sketch.low_rank_representation
+    assert row["nystrom_eigenvalue_floor"] == config.sketch.nystrom_eigenvalue_floor
 
 
 def test_layer_metrics_include_effective_bits_per_weight() -> None:

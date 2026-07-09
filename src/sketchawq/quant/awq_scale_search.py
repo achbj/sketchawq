@@ -316,14 +316,7 @@ def _candidate_search_score(
 ) -> float:
     weighted_score = None
     if quant_config.search_objective in {"weighted_error", "hybrid"}:
-        weighted_score = weighted_error_score(
-            weight,
-            candidate,
-            diagonal=sketch.diagonal,
-            basis=sketch.basis,
-            low_rank_weight=sketch_config.low_rank_weight,
-            normalize_terms=sketch_config.normalize_error_terms,
-        )
+        weighted_score = _weighted_search_score(weight, candidate, sketch, sketch_config)
     if quant_config.search_objective == "weighted_error":
         assert weighted_score is not None
         primary_score = float(weighted_score)
@@ -339,14 +332,7 @@ def _candidate_search_score(
         if weighted_score is not None:
             primary_score = float(weighted_score)
         else:
-            primary_score = weighted_error_score(
-            weight,
-            candidate,
-            diagonal=sketch.diagonal,
-            basis=sketch.basis,
-            low_rank_weight=sketch_config.low_rank_weight,
-            normalize_terms=sketch_config.normalize_error_terms,
-        )
+            primary_score = _weighted_search_score(weight, candidate, sketch, sketch_config)
         return _with_tied_embedding_score(
             primary_score,
             weight,
@@ -406,3 +392,20 @@ def _tied_embedding_score(
         row_weights,
         normalize_terms=True,
     )
+
+
+def _weighted_search_score(
+    weight: torch.Tensor,
+    candidate: torch.Tensor,
+    sketch: HessianSketch,
+    sketch_config: SketchConfig,
+) -> float:
+    kwargs = {
+        "diagonal": sketch.diagonal,
+        "basis": sketch.basis,
+        "low_rank_weight": sketch_config.low_rank_weight,
+        "normalize_terms": sketch_config.normalize_error_terms,
+    }
+    if sketch.factor is not None:
+        kwargs["factor"] = sketch.factor
+    return weighted_error_score(weight, candidate, **kwargs)

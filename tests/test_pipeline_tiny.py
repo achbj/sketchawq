@@ -80,6 +80,36 @@ def test_pipeline_skips_packed_layers_when_model_export_is_disabled() -> None:
     assert report.packed_layers == []
 
 
+def test_pipeline_reports_nystrom_curvature_representation() -> None:
+    model = GPT2LMHeadModel(
+        GPT2Config(
+            vocab_size=32,
+            n_positions=16,
+            n_embd=16,
+            n_layer=1,
+            n_head=2,
+            n_inner=32,
+        )
+    )
+    input_ids = torch.randint(0, 32, (1, 16))
+    batch = CalibrationBatch(input_ids=input_ids, attention_mask=torch.ones_like(input_ids))
+    config = SketchAWQConfig()
+    config.quantization.bits = 4
+    config.quantization.group_size = 8
+    config.sketch.rank = 2
+    config.sketch.max_rows_per_batch = 8
+    config.sketch.low_rank_representation = "nystrom"
+    config.evaluation.enabled = False
+    config.output.save_model = False
+
+    report = quantize_model(model, [batch], config)
+
+    assert report.method == "SketchAWQ-diagonal-nystrom-tied-embedding-v1"
+    assert report.layers
+    assert {layer.low_rank_representation for layer in report.layers} == {"nystrom"}
+    assert all(layer.uses_spectrum_factor for layer in report.layers)
+
+
 def test_pipeline_labels_awq_only_ablation() -> None:
     model = GPT2LMHeadModel(
         GPT2Config(
