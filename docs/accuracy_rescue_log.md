@@ -312,3 +312,37 @@ Commands:
 scripts/run_holdout_guard_ablation.sh both --gpu A100
 scripts/sync_holdout_guard_ablation.sh both
 ```
+
+## 2026-07-09 - Full-Model C4 Selection Gate
+
+Status:
+- Implemented and validated; current local scale refinement remains the
+  development control for W3 and W4.
+
+Protocol:
+- Quantization search stays on 256 packed C4-train samples at 2048 tokens.
+- A disjoint 32-sample packed C4-validation board evaluates the complete FP16
+  and quantized model before any final WikiText2 run.
+- Selection-only configs explicitly disable final evaluation, so WikiText2 is
+  not loaded as part of a candidate-selection run.
+
+Artifact:
+- `artifacts/model_selection/qwen3_4b_model_selection_20260709_210000`
+
+Results:
+- W3: FP16 23.1017, control 54.9869, local refinement 36.3325.
+- W4: FP16 23.1017, control 27.9812, local refinement 25.1709.
+
+Decision:
+- The C4 board agrees with the already frozen WikiText2 ordering for the
+  current strict recipes. Keep local scale refinement as the only promoted
+  development treatment.
+- A new mechanism must improve this heldout board before it receives a fresh
+  WikiText2 confirmation. Do not use WikiText2 to select its parameters.
+
+Commands:
+
+```bash
+scripts/run_model_selection_ablation.sh both --gpu A100
+scripts/sync_model_selection_ablation.sh both
+```

@@ -963,3 +963,48 @@ Decision:
 Next action:
 - Select future mechanisms by full-model held-out loss before final evaluation,
   then confirm any winner under a separate seed and model family.
+
+### 2026-07-09 - Full-Model C4 Selection Board
+
+Status:
+- Passed as evaluation infrastructure and established the frozen W3/W4 local
+  refinement as the development control.
+
+Git:
+- Runner/reporting: `bb667d4`
+- Frozen W3/W4 controls: `792e4aa`
+
+Command:
+
+```bash
+scripts/run_model_selection_ablation.sh both --gpu A100
+scripts/sync_model_selection_ablation.sh both
+```
+
+Artifact:
+- `artifacts/model_selection/qwen3_4b_model_selection_20260709_210000`
+
+Setup:
+- Model: `Qwen/Qwen3-4B`, FP16, default revision.
+- Bits/group size: symmetric W3 and W4, g128.
+- Search calibration: C4 train, 256 packed 2048-token samples, seed 42.
+- Selection-only board: C4 validation, 32 packed 2048-token samples.
+- Final WikiText2 evaluation: disabled by design for these runs.
+- GPU: NVIDIA A100-SXM4-40GB.
+
+Results:
+
+| Bits | FP16 C4 PPL | Control C4 PPL | Refined C4 PPL | Quantization time, control/refined |
+| ---: | ---: | ---: | ---: | ---: |
+| 3 | 23.1017 | 54.9869 | 36.3325 | 56.53s / 76.99s |
+| 4 | 23.1017 | 27.9812 | 25.1709 | 55.11s / 76.31s |
+
+Decision:
+- The selection board independently agrees with the previously observed
+  WikiText2 ordering, so local scale refinement stays as the fixed development
+  control.
+- The next mechanism must win on C4 validation before any final-board run.
+
+Next action:
+- Test one fixed sequential error-compensation mechanism against the refined
+  control only, then reject or promote it using this selection board.

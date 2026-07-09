@@ -116,6 +116,8 @@ Decision rules:
 ### Step 3: Add Robustness Checks Before New Tuning
 
 - [x] Qwen3-8B: compare C4-calibrated WikiText eval against C4 validation eval.
+- [x] Add a Qwen3-4B full-model C4-validation selection board that disables
+      WikiText2 while candidates are compared.
 - [ ] Qwen3-8B: rerun final configs with at least one alternate calibration
       seed.
 - [ ] Qwen3-32B: run/sync the configured C4-calibrated WikiText rows.
