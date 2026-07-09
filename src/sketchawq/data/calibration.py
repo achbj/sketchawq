@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from collections.abc import Iterable
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from itertools import cycle, islice
 from random import Random
 from typing import Any
@@ -128,6 +128,30 @@ def make_calibration_batches(
         TextBatchConfig.from_calibration(config),
         device=device,
     )
+
+
+def make_calibration_and_holdout_batches(
+    tokenizer,
+    config: CalibrationConfig,
+    *,
+    device: torch.device,
+) -> tuple[list[CalibrationBatch], list[CalibrationBatch]]:
+    """Build stable search batches and a disjoint configured holdout split."""
+    calibration_batches = make_calibration_batches(tokenizer, config, device=device)
+    if config.holdout_samples <= 0:
+        return calibration_batches, []
+    if not config.holdout_split:
+        raise ValueError("calibration.holdout_split is required when holdout_samples is positive")
+
+    holdout_config = replace(
+        config,
+        split=config.holdout_split,
+        num_samples=config.holdout_samples,
+        holdout_samples=0,
+        holdout_split=None,
+    )
+    holdout_batches = make_calibration_batches(tokenizer, holdout_config, device=device)
+    return calibration_batches, holdout_batches
 
 
 def make_text_batches(

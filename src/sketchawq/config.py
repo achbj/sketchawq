@@ -376,6 +376,8 @@ class CalibrationConfig:
     packing: bool = False
     packing_strategy: str = "stream"
     batch_size: int = 1
+    holdout_samples: int = 0
+    holdout_split: str | None = None
 
     def validate(self) -> None:
         if self.num_samples <= 0:
@@ -384,6 +386,17 @@ class CalibrationConfig:
             raise ValueError("sequence_length must be positive")
         if self.batch_size <= 0:
             raise ValueError("calibration.batch_size must be positive")
+        if self.holdout_samples < 0:
+            raise ValueError("calibration.holdout_samples must be non-negative")
+        if self.holdout_samples > 0:
+            if not self.holdout_split or not self.holdout_split.strip():
+                raise ValueError(
+                    "calibration.holdout_split is required when holdout_samples is positive"
+                )
+            if self.source == "dataset" and self.holdout_split == self.split:
+                raise ValueError(
+                    "calibration.holdout_split must differ from calibration.split for datasets"
+                )
         self.packing_strategy = self.packing_strategy.strip().lower().replace("-", "_")
         self.packing_strategy = PACKING_STRATEGY_ALIASES.get(
             self.packing_strategy,

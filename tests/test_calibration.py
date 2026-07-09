@@ -1,10 +1,16 @@
 from __future__ import annotations
 
+import pytest
 import torch
 
 from sketchawq.config import CalibrationConfig, load_config
 from sketchawq.data import calibration
-from sketchawq.data.calibration import TextBatchConfig, make_calibration_batches, make_text_batches
+from sketchawq.data.calibration import (
+    TextBatchConfig,
+    make_calibration_and_holdout_batches,
+    make_calibration_batches,
+    make_text_batches,
+)
 
 
 class WhitespaceTokenizer:
@@ -142,6 +148,56 @@ def test_unpacked_calibration_can_batch_samples(monkeypatch) -> None:
     assert [tuple(batch.input_ids.shape) for batch in batches] == [(2, 3), (1, 3)]
     torch.testing.assert_close(batches[0].input_ids, torch.tensor([[1, 0, 0], [2, 0, 0]]))
     torch.testing.assert_close(batches[1].input_ids, torch.tensor([[3, 0, 0]]))
+
+
+def test_calibration_holdout_uses_a_separate_dataset_split(monkeypatch) -> None:
+    requested_splits: list[str] = []
+
+    def fake_load_dataset(*args, **kwargs):
+        del args
+        split = kwargs["split"]
+        requested_splits.append(split)
+        if split == "train":
+            return [{"text": "train alpha"}, {"text": "train beta"}]
+        return [{"text": "holdout gamma"}]
+
+    monkeypatch.setattr(calibration, "load_dataset", fake_load_dataset)
+    tokenizer = WhitespaceTokenizer()
+    config = CalibrationConfig(
+        source="dataset",
+        dataset_name="example",
+        dataset_config="en",
+        split="train",
+        num_samples=2,
+        sequence_length=3,
+        packing=False,
+        holdout_samples=1,
+        holdout_split="validation",
+    )
+
+    search_batches, holdout_batches = make_calibration_and_holdout_batches(
+        tokenizer,
+        config,
+        device=torch.device("cpu"),
+    )
+
+    assert requested_splits == ["train", "validation"]
+    assert len(search_batches) == 2
+    assert len(holdout_batches) == 1
+    torch.testing.assert_close(search_batches[0].input_ids, torch.tensor([[1, 2, 0]]))
+    torch.testing.assert_close(holdout_batches[0].input_ids, torch.tensor([[4, 5, 0]]))
+
+
+def test_calibration_holdout_requires_a_distinct_dataset_split() -> None:
+    config = CalibrationConfig(
+        source="dataset",
+        split="train",
+        holdout_samples=1,
+        holdout_split="train",
+    )
+
+    with pytest.raises(ValueError, match="holdout_split must differ"):
+        config.validate()
 
 
 def test_packed_calibration_builds_full_chunks_without_padding(monkeypatch) -> None:
