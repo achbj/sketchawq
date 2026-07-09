@@ -81,3 +81,114 @@ def test_sequential_sync_dry_run_collects_holdout_selection_metrics() -> None:
         assert f"qwen3_4b_{bits}bit_strict_g128_refine_selection" in result.stdout
         assert f"qwen3_4b_{bits}bit_strict_g128_refine_sequential_selection" in result.stdout
     assert "--table model-selection" in result.stdout
+
+
+@pytest.mark.parametrize("bits", [3, 4])
+def test_confirmation_treatment_changes_only_error_compensation(bits: int) -> None:
+    control = load_config(
+        PROJECT_ROOT
+        / "configs"
+        / "experiments"
+        / "sequential_compensation"
+        / "confirmation"
+        / f"qwen3_4b_{bits}bit_control.yaml"
+    )
+    treatment = load_config(
+        PROJECT_ROOT
+        / "configs"
+        / "experiments"
+        / "sequential_compensation"
+        / "confirmation"
+        / f"qwen3_4b_{bits}bit_sequential.yaml"
+    )
+
+    assert control.quantization.error_compensation == "none"
+    assert treatment.quantization.error_compensation == "sequential_sketch"
+    assert control.evaluation.enabled
+    assert treatment.evaluation.enabled
+    assert not control.model_selection.enabled
+    assert not treatment.model_selection.enabled
+
+    control_data = asdict(control)
+    treatment_data = asdict(treatment)
+    for data in (control_data, treatment_data):
+        del data["quantization"]["error_compensation"]
+        del data["output"]["run_name"]
+    assert treatment_data == control_data
+
+
+@pytest.mark.parametrize("bits", [3, 4])
+def test_confirmation_control_matches_frozen_strict_config(bits: int) -> None:
+    frozen = load_config(
+        PROJECT_ROOT
+        / "configs"
+        / "experiments"
+        / "strict_budget"
+        / f"qwen3_4b_{bits}bit_refine.yaml"
+    )
+    control = load_config(
+        PROJECT_ROOT
+        / "configs"
+        / "experiments"
+        / "sequential_compensation"
+        / "confirmation"
+        / f"qwen3_4b_{bits}bit_control.yaml"
+    )
+
+    frozen_data = asdict(frozen)
+    control_data = asdict(control)
+    del frozen_data["output"]["run_name"]
+    del control_data["output"]["run_name"]
+    assert control_data == frozen_data
+
+
+def test_confirmation_launcher_dry_runs_both_widths() -> None:
+    result = subprocess.run(
+        [
+            str(
+                PROJECT_ROOT
+                / "scripts"
+                / "run_sequential_compensation_confirmation.sh"
+            ),
+            "both",
+            "--gpu",
+            "A100",
+            "--dry-run",
+        ],
+        cwd=PROJECT_ROOT,
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+
+    assert "SKETCHAWQ_MODAL_GPU=A100" in result.stdout
+    for bits in (3, 4):
+        assert f"qwen3_4b_{bits}bit_control.yaml" in result.stdout
+        assert f"qwen3_4b_{bits}bit_sequential.yaml" in result.stdout
+
+
+def test_confirmation_sync_dry_run_collects_wikitext_runs() -> None:
+    result = subprocess.run(
+        [
+            str(
+                PROJECT_ROOT
+                / "scripts"
+                / "sync_sequential_compensation_confirmation.sh"
+            ),
+            "both",
+            "--dry-run",
+        ],
+        cwd=PROJECT_ROOT,
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+
+    assert result.stdout.count("volume get") == 4
+    for bits in (3, 4):
+        assert f"qwen3_4b_{bits}bit_strict_g128_refine_confirmation" in result.stdout
+        assert (
+            f"qwen3_4b_{bits}bit_strict_g128_refine_sequential_confirmation"
+            in result.stdout
+        )
+    assert "--table model-selection" not in result.stdout
