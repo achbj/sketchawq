@@ -2,7 +2,11 @@ from __future__ import annotations
 
 import torch
 
-from sketchawq.quant.refinement_guard import select_holdout_output_refinement
+from sketchawq.quant.refinement_guard import (
+    compare_holdout_output_scores,
+    score_holdout_output_candidate,
+    select_holdout_output_refinement,
+)
 
 
 def test_holdout_guard_accepts_a_strict_output_improvement() -> None:
@@ -41,4 +45,19 @@ def test_holdout_guard_uses_tied_embedding_frequency_as_a_tie_breaker() -> None:
     assert selection.baseline.output == selection.refined.output
     assert selection.baseline.tied_embedding is not None
     assert selection.refined.tied_embedding is not None
+    assert selection.accepts_refined is True
+
+
+def test_holdout_guard_compares_precomputed_scores_without_candidates() -> None:
+    weight = torch.eye(2)
+    activation_rows = torch.eye(2)
+    baseline = score_holdout_output_candidate(
+        weight,
+        torch.zeros_like(weight),
+        activation_rows,
+    )
+    refined = score_holdout_output_candidate(weight, weight, activation_rows)
+
+    selection = compare_holdout_output_scores(baseline, refined)
+
     assert selection.accepts_refined is True

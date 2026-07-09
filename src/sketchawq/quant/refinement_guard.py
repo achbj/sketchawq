@@ -83,6 +83,14 @@ def select_holdout_output_refinement(
         tied_embedding_row_weights=tied_embedding_row_weights,
         tied_embedding_error_weight=tied_embedding_error_weight,
     )
+    return compare_holdout_output_scores(baseline, refined)
+
+
+def compare_holdout_output_scores(
+    baseline: HoldoutCandidateScore,
+    refined: HoldoutCandidateScore,
+) -> HoldoutRefinementSelection:
+    """Choose from already-scored candidates without retaining both tensors."""
     return HoldoutRefinementSelection(
         baseline=baseline,
         refined=refined,

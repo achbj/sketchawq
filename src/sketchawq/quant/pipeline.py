@@ -26,6 +26,11 @@ from sketchawq.quant.quantizer import (
     refine_quantized_scales,
     refine_quantized_scales_globally,
 )
+from sketchawq.quant.refinement_guard import (
+    HoldoutCandidateScore,
+    compare_holdout_output_scores,
+    score_holdout_output_candidate,
+)
 
 LOGGER = logging.getLogger(__name__)
 
@@ -45,6 +50,10 @@ class LayerQuantizationSummary:
     scale_clip_search: str
     scale_refinement: str
     scale_refinement_steps: int
+    scale_refinement_guard: str
+    holdout_baseline_score: float | None
+    holdout_refined_score: float | None
+    holdout_refinement_accepted: bool | None
     awq_alpha: float
     clip_ratio: float
     awq_scale_normalization: str
@@ -139,6 +148,7 @@ def quantize_model(
     model: torch.nn.Module,
     calibration_batches,
     config: SketchAWQConfig,
+    selection_batches=None,
 ) -> QuantizationSummary:
     start = time.perf_counter()
     timings: dict[str, float | int | bool] = {}
@@ -163,6 +173,33 @@ def quantize_model(
     )
     timings["collect_stats_seconds"] = time.perf_counter() - phase_start
     timings.update(stats_result.timings)
+
+    selection_stats_result = None
+    if config.quantization.scale_refinement_guard == "holdout_output":
+        if selection_batches is None:
+            raise ValueError("holdout_output refinement guard requires selection_batches")
+        selection_batches = list(selection_batches)
+        if not selection_batches:
+            raise ValueError("holdout_output refinement guard requires non-empty selection_batches")
+        LOGGER.info("Collecting held-out activation rows for refinement selection")
+        phase_start = time.perf_counter()
+        selection_stats_result = collect_layer_stats_with_summary(
+            model,
+            selection_batches,
+            sketch_rank=0,
+            max_rows_per_batch=config.sketch.max_rows_per_batch,
+            seed=config.runtime.seed,
+            row_sampling=config.sketch.row_sampling,
+            mask_mismatch_action=config.sketch.mask_mismatch_action,
+            activation_sample_rows=config.quantization.output_error_rows,
+        )
+        timings["collect_holdout_stats_seconds"] = time.perf_counter() - phase_start
+        timings.update(
+            {
+                f"holdout_{key}": value
+                for key, value in selection_stats_result.timings.items()
+            }
+        )
 
     summaries: list[LayerQuantizationSummary] = []
     packed_layers: list[PackedLayerArtifact] = []
@@ -255,6 +292,8 @@ def quantize_model(
             clip_ratio=search_result.clip_ratio,
             input_scale=search_result.scales,
         )
+        baseline_quantized = quantized
+        holdout_selection = None
         if effective_quant_config.scale_refinement == "sketch":
             quantized = refine_quantized_scales(
                 weight,
@@ -276,6 +315,37 @@ def quantize_model(
                 low_rank_weight=config.sketch.low_rank_weight,
                 steps=effective_quant_config.scale_refinement_steps,
             )
+        if effective_quant_config.scale_refinement_guard == "holdout_output":
+            if selection_stats_result is None:
+                raise RuntimeError("missing held-out activation statistics")
+            selection_stats = selection_stats_result.stats.get(name)
+            if selection_stats is None or selection_stats.activation_sample is None:
+                raise RuntimeError(f"missing held-out activation rows for {name}")
+            selection_tied_embedding_row_weights = _tied_embedding_row_weights(
+                selection_stats_result.token_histogram,
+                tied_weight,
+                output_features=module.out_features,
+                strategy=effective_quant_config.tied_weight_strategy,
+            )
+            baseline_score = _score_quantized_holdout_candidate(
+                weight,
+                baseline_quantized,
+                input_scale=search_result.scales,
+                activation_rows=selection_stats.activation_sample,
+                tied_embedding_row_weights=selection_tied_embedding_row_weights,
+                tied_embedding_error_weight=effective_quant_config.tied_embedding_error_weight,
+            )
+            refined_score = _score_quantized_holdout_candidate(
+                weight,
+                quantized,
+                input_scale=search_result.scales,
+                activation_rows=selection_stats.activation_sample,
+                tied_embedding_row_weights=selection_tied_embedding_row_weights,
+                tied_embedding_error_weight=effective_quant_config.tied_embedding_error_weight,
+            )
+            holdout_selection = compare_holdout_output_scores(baseline_score, refined_score)
+            if not holdout_selection.accepts_refined:
+                quantized = baseline_quantized
         quantized_weight = dequantize_weight_with_input_scale(
             quantized,
             input_scale=search_result.scales,
@@ -354,6 +424,16 @@ def quantize_model(
                 scale_clip_search=effective_quant_config.scale_clip_search,
                 scale_refinement=effective_quant_config.scale_refinement,
                 scale_refinement_steps=effective_quant_config.scale_refinement_steps,
+                scale_refinement_guard=effective_quant_config.scale_refinement_guard,
+                holdout_baseline_score=(
+                    None if holdout_selection is None else holdout_selection.baseline.total
+                ),
+                holdout_refined_score=(
+                    None if holdout_selection is None else holdout_selection.refined.total
+                ),
+                holdout_refinement_accepted=(
+                    None if holdout_selection is None else holdout_selection.accepts_refined
+                ),
                 awq_alpha=search_result.alpha,
                 clip_ratio=search_result.clip_ratio,
                 awq_scale_normalization=effective_quant_config.awq_scale_normalization,
@@ -390,9 +470,10 @@ def quantize_model(
     timings["layer_elapsed_sum_seconds"] = sum(layer.layer_elapsed_seconds for layer in summaries)
     elapsed = time.perf_counter() - start
     timed_total = sum(
-        timings[key]
+        timings.get(key, 0.0)
         for key in (
             "collect_stats_seconds",
+            "collect_holdout_stats_seconds",
             "prepare_sketches_seconds",
             "layer_quantization_seconds",
         )
@@ -413,6 +494,33 @@ def quantize_model(
         layers=summaries,
         packed_layers=packed_layers,
     )
+
+
+def _score_quantized_holdout_candidate(
+    weight: torch.Tensor,
+    quantized,
+    *,
+    input_scale: torch.Tensor,
+    activation_rows: torch.Tensor,
+    tied_embedding_row_weights: torch.Tensor | None,
+    tied_embedding_error_weight: float,
+) -> HoldoutCandidateScore:
+    candidate = dequantize_weight_with_input_scale(
+        quantized,
+        input_scale=input_scale,
+        device=weight.device,
+        dtype=weight.dtype,
+    )
+    try:
+        return score_holdout_output_candidate(
+            weight,
+            candidate,
+            activation_rows,
+            tied_embedding_row_weights=tied_embedding_row_weights,
+            tied_embedding_error_weight=tied_embedding_error_weight,
+        )
+    finally:
+        del candidate
 
 
 def _estimate_quantized_storage(
@@ -492,6 +600,9 @@ def _method_label(
     elif config.quantization.scale_refinement == "global_sketch":
         label = _without_method_version(label)
         label = f"{label}-global-scale-refine-v1"
+    if config.quantization.scale_refinement_guard == "holdout_output":
+        label = _without_method_version(label)
+        label = f"{label}-holdout-output-guard-v0"
     if config.outliers.active():
         label = _without_method_version(label)
         label = f"{label}-outlier-{config.outliers.strategy}-v0"

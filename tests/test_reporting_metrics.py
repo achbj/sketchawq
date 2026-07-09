@@ -76,6 +76,9 @@ def test_run_summary_includes_global_storage_estimates() -> None:
     assert row["awq_max_scale"] == config.quantization.awq_max_scale
     assert row["scale_refinement"] == config.quantization.scale_refinement
     assert row["scale_refinement_steps"] == config.quantization.scale_refinement_steps
+    assert row["scale_refinement_guard"] == config.quantization.scale_refinement_guard
+    assert row["calibration_holdout_samples"] == config.calibration.holdout_samples
+    assert row["calibration_holdout_split"] == config.calibration.holdout_split
     assert row["low_rank_representation"] == config.sketch.low_rank_representation
     assert row["nystrom_eigenvalue_floor"] == config.sketch.nystrom_eigenvalue_floor
 
@@ -105,6 +108,7 @@ def test_layer_metrics_include_effective_bits_per_weight() -> None:
     assert row["estimated_effective_bits_per_weight"] == pytest.approx(5.0)
     assert row["scale_refinement"] == config.quantization.scale_refinement
     assert row["scale_refinement_steps"] == config.quantization.scale_refinement_steps
+    assert row["scale_refinement_guard"] == config.quantization.scale_refinement_guard
 
 
 def test_layer_metrics_keep_joint_search_score_separate_from_stage_scores() -> None:

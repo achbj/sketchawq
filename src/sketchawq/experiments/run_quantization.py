@@ -8,7 +8,7 @@ from typing import Any
 from sketchawq.config import load_config
 from sketchawq.data.calibration import (
     TextBatchConfig,
-    make_calibration_batches,
+    make_calibration_and_holdout_batches,
     make_text_batches,
 )
 from sketchawq.eval.runner import evaluate_model_variant
@@ -36,7 +36,7 @@ def run_from_config(
     device = choose_device(config.runtime.device)
     LOGGER.info("Using device: %s", device)
     tokenizer, model = load_causal_lm(config.model, cache_dir=model_cache_dir, device=device)
-    calibration_batches = make_calibration_batches(
+    calibration_batches, holdout_batches = make_calibration_and_holdout_batches(
         tokenizer,
         config.calibration,
         device=device,
@@ -59,7 +59,12 @@ def run_from_config(
             method="FP16",
         )
 
-    quant_summary = quantize_model(model, calibration_batches, config)
+    quant_summary = quantize_model(
+        model,
+        calibration_batches,
+        config,
+        selection_batches=holdout_batches,
+    )
     root = Path(output_root) if output_root is not None else Path(config.output.output_dir)
     output_dir = root / config.output.run_name
     report: dict[str, Any] = {

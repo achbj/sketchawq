@@ -230,3 +230,44 @@ def test_pipeline_labels_and_reports_global_sketch_scale_refinement() -> None:
     assert report.layers
     assert {layer.scale_refinement for layer in report.layers} == {"global_sketch"}
     assert {layer.scale_refinement_steps for layer in report.layers} == {2}
+
+
+def test_pipeline_applies_holdout_output_refinement_guard() -> None:
+    model = GPT2LMHeadModel(
+        GPT2Config(
+            vocab_size=32,
+            n_positions=16,
+            n_embd=16,
+            n_layer=1,
+            n_head=2,
+            n_inner=32,
+        )
+    )
+    input_ids = torch.randint(0, 32, (1, 16))
+    selection_ids = torch.randint(0, 32, (1, 16))
+    batch = CalibrationBatch(input_ids=input_ids, attention_mask=torch.ones_like(input_ids))
+    selection_batch = CalibrationBatch(
+        input_ids=selection_ids,
+        attention_mask=torch.ones_like(selection_ids),
+    )
+    config = SketchAWQConfig()
+    config.quantization.bits = 4
+    config.quantization.group_size = 8
+    config.quantization.scale_refinement = "sketch"
+    config.quantization.scale_refinement_steps = 2
+    config.quantization.scale_refinement_guard = "holdout_output"
+    config.quantization.output_error_rows = 4
+    config.sketch.rank = 2
+    config.sketch.max_rows_per_batch = 8
+    config.evaluation.enabled = False
+    config.output.save_model = False
+
+    report = quantize_model(model, [batch], config, selection_batches=[selection_batch])
+
+    assert "holdout-output-guard" in report.method
+    assert report.timings["collect_holdout_stats_seconds"] >= 0
+    assert report.layers
+    assert {layer.scale_refinement_guard for layer in report.layers} == {"holdout_output"}
+    assert all(layer.holdout_baseline_score is not None for layer in report.layers)
+    assert all(layer.holdout_refined_score is not None for layer in report.layers)
+    assert all(layer.holdout_refinement_accepted is not None for layer in report.layers)
