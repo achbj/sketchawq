@@ -75,8 +75,7 @@ def test_nystrom_sketch_preserves_low_rank_spectrum_and_input_diagonal() -> None
     assert sketch.factor is not None
     assert sketch.rank == 2
     assert sketch.low_rank_representation == "nystrom"
+    assert sketch.curvature_diagonal is not None
     approximation = sketch.factor @ sketch.factor.transpose(0, 1)
-    approximation = approximation + torch.diag(
-        sketch.diagonal - sketch.factor.square().sum(dim=1)
-    )
+    approximation = approximation + torch.diag(sketch.curvature_diagonal)
     torch.testing.assert_close(approximation, hessian / hessian.diag().mean(), atol=1e-5, rtol=1e-5)

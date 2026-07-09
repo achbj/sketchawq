@@ -15,7 +15,14 @@ class HessianSketch:
     rank: int
     mode: str
     factor: torch.Tensor | None = None
+    residual_diagonal: torch.Tensor | None = None
     low_rank_representation: str = "orthonormal"
+
+    @property
+    def curvature_diagonal(self) -> torch.Tensor | None:
+        if self.factor is not None:
+            return self.residual_diagonal
+        return self.diagonal
 
 
 def build_hessian_sketch(stats: LayerStats, config: SketchConfig) -> HessianSketch:
@@ -28,6 +35,7 @@ def build_hessian_sketch(stats: LayerStats, config: SketchConfig) -> HessianSket
 
     basis = None
     factor = None
+    residual_diagonal = None
     if config.uses_low_rank():
         h_omega = stats.hessian_times_omega
         if h_omega is not None and torch.isfinite(h_omega).all():
@@ -44,6 +52,9 @@ def build_hessian_sketch(stats: LayerStats, config: SketchConfig) -> HessianSket
             else:
                 basis = _orthonormal_basis(h_omega, config.rank)
 
+    if factor is not None and diagonal is not None:
+        residual_diagonal = (diagonal - factor.square().sum(dim=1)).clamp_min(0)
+
     low_rank = factor if factor is not None else basis
 
     return HessianSketch(
@@ -52,6 +63,7 @@ def build_hessian_sketch(stats: LayerStats, config: SketchConfig) -> HessianSket
         rank=0 if low_rank is None else low_rank.shape[1],
         mode=mode,
         factor=factor,
+        residual_diagonal=residual_diagonal,
         low_rank_representation=config.low_rank_representation,
     )
 

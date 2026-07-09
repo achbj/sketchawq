@@ -401,7 +401,7 @@ def _weighted_search_score(
     sketch_config: SketchConfig,
 ) -> float:
     kwargs = {
-        "diagonal": sketch.diagonal,
+        "diagonal": sketch.curvature_diagonal,
         "basis": sketch.basis,
         "low_rank_weight": sketch_config.low_rank_weight,
         "normalize_terms": sketch_config.normalize_error_terms,
