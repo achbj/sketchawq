@@ -241,3 +241,42 @@ Commands:
 scripts/run_spectrum_curvature_ablation.sh both --gpu A100
 scripts/sync_spectrum_curvature_ablation.sh both
 ```
+
+## 2026-07-09 - Globally Coupled Nystrom Scale Refinement
+
+Status:
+- Rejected on the fixed Qwen3-4B development protocol.
+
+Hypothesis:
+- Refitting each group against the complete Nystrom residual would improve on
+  independent scale fitting without changing the bit budget, group size, or
+  packed layout.
+
+Guardrails:
+- The W3/W4 treatment changed only `scale_refinement` from `none` to
+  `global_sketch` relative to valid Nystrom-residual controls.
+- C4 train calibration remained separate from the full WikiText2 validation
+  board. No result was used to change grids or acceptance thresholds.
+
+Artifact:
+- `artifacts/global_refinement/qwen3_4b_global_refinement_20260709_201325`
+
+Results:
+- W3 regressed from 39.0111 to 74.7686 PPL.
+- W4 regressed from 18.0479 to 18.8322 PPL.
+- Quantization time rose to 90.06s/89.12s for W3/W4, with 41.60s/43.01s in
+  layer refinement alone.
+
+Decision:
+- Do not tune or promote the global update.
+- Preserve the code, configs, scripts, and artifact bundle as a rejected
+  ablation.
+- Add an output-aware calibration guard before the next post-search mechanism,
+  and use a held-out calibration confirmation protocol before any paper claim.
+
+Commands:
+
+```bash
+scripts/run_global_refinement_ablation.sh both --gpu A100
+scripts/sync_global_refinement_ablation.sh both
+```

@@ -1,6 +1,6 @@
 # SketchAWQ Experiment Ledger
 
-Last updated: 2026-05-25
+Last updated: 2026-07-09
 
 This is the detailed experiment record. The goal is to preserve every important run decision, not just the final pretty board.
 
@@ -863,3 +863,54 @@ Decision:
 Next action:
 - Replace independent low-rank group-scale fitting with a globally coupled
   residual update, then rerun W3 and W4 under the same fixed protocol.
+
+### 2026-07-09 - Globally Coupled Nystrom Scale Refinement
+
+Status:
+- Rejected.
+
+Git:
+- Implementation: `012eb86`
+- Controls: `9fad129`
+- Scripts: `a36e0df`
+- Branch: `codex/sketch-conditioned-refinement`
+- Dirty worktree: no source changes during the Modal run.
+
+Command:
+
+```bash
+scripts/run_global_refinement_ablation.sh both --gpu A100
+scripts/sync_global_refinement_ablation.sh both
+```
+
+Configs:
+- `configs/experiments/global_refinement/qwen3_4b_3bit_global_refine.yaml`
+- `configs/experiments/global_refinement/qwen3_4b_4bit_global_refine.yaml`
+
+Artifact:
+- `artifacts/global_refinement/qwen3_4b_global_refinement_20260709_201325`
+
+Setup:
+- Model: `Qwen/Qwen3-4B`, FP16, default revision.
+- Method: Nystrom diagonal-plus-factor curvature with global scale refinement.
+- Bits/group size: symmetric W3 and W4, g128.
+- Calibration: C4 train, 256 packed 2048-token samples, seed 42, batch size 8.
+- Evaluation: full packed WikiText2 validation at 2048 tokens.
+- GPU: NVIDIA A100-SXM4-40GB.
+
+Results:
+
+| Bits | FP16 PPL | Nystrom control PPL | Global PPL | Quantization time | Layer time |
+| ---: | ---: | ---: | ---: | ---: | ---: |
+| 3 | 15.3760 | 39.0111 | 74.7686 | 90.06s | 41.60s |
+| 4 | 15.3760 | 18.0479 | 18.8322 | 89.12s | 43.01s |
+
+Decision:
+- Reject the global residual update. It is a W3 collapse and a W4 regression,
+  while adding substantial quantization time.
+- Do not alter the mechanism through final-evaluation tuning.
+
+Next action:
+- Add a calibration-only output-aware acceptance guard for post-search
+  refinements, then confirm any improvement on a held-out calibration split,
+  alternate seed, and cross-model board.
