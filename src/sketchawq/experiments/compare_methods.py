@@ -114,15 +114,20 @@ def main() -> None:
     parser.add_argument("--format", choices=["json", "csv"], default="json")
     parser.add_argument(
         "--table",
-        choices=["run", "evaluation"],
+        choices=["run", "evaluation", "model-selection"],
         default="run",
         help="Which comparison table to collect.",
     )
     parser.add_argument("--output", default=None, help="Optional output path. Defaults to stdout.")
     args = parser.parse_args()
 
-    if args.table == "evaluation":
-        rows = _evaluation_rows(args.reports)
+    if args.table in {"evaluation", "model-selection"}:
+        filename = (
+            "evaluation_metrics.csv"
+            if args.table == "evaluation"
+            else "model_selection_metrics.csv"
+        )
+        rows = _metric_rows(args.reports, filename=filename)
         fields = _union_fields(rows)
         _write_rows(rows, fields, args)
         return
@@ -131,16 +136,16 @@ def main() -> None:
     _write_rows(rows, RUN_SUMMARY_FIELDS + ["report"], args)
 
 
-def _evaluation_rows(inputs: list[str]) -> list[dict]:
+def _metric_rows(inputs: list[str], *, filename: str) -> list[dict]:
     rows: list[dict] = []
     for item in inputs:
         path = Path(item)
         if path.is_dir():
             candidates = []
-            direct = path / "evaluation_metrics.csv"
+            direct = path / filename
             if direct.exists():
                 candidates.append(direct)
-            candidates.extend(sorted(path.glob("*/evaluation_metrics.csv")))
+            candidates.extend(sorted(path.glob(f"*/{filename}")))
         else:
             candidates = [path]
         for candidate in candidates:

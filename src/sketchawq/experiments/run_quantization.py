@@ -41,16 +41,32 @@ def run_from_config(
         config.calibration,
         device=device,
     )
-    evaluation_batches = _make_evaluation_batches(
-        tokenizer,
-        config,
-        calibration_batches=calibration_batches,
-        device=device,
-    )
+    evaluation_batches = None
+    if config.evaluation.enabled:
+        evaluation_batches = _make_evaluation_batches(
+            tokenizer,
+            config,
+            calibration_batches=calibration_batches,
+            device=device,
+        )
 
     evaluations: dict[str, Any] = {}
+    model_selection: dict[str, Any] = {}
+    if config.model_selection.enabled:
+        if not holdout_batches:
+            raise RuntimeError("model_selection requires non-empty calibration holdout batches")
+        if config.model_selection.compare_original:
+            LOGGER.info("Evaluating original model on held-out selection data")
+            model_selection["original"] = evaluate_model_variant(
+                model,
+                holdout_batches,
+                config.model_selection,
+                variant="original_fp16",
+                method="FP16",
+            )
     if config.evaluation.enabled and config.evaluation.compare_original:
         LOGGER.info("Evaluating original model before quantization")
+        assert evaluation_batches is not None
         evaluations["original"] = evaluate_model_variant(
             model,
             evaluation_batches,
@@ -73,8 +89,20 @@ def run_from_config(
         "quantization": quant_summary.to_dict(),
     }
 
+    if config.model_selection.enabled:
+        LOGGER.info("Evaluating quantized model on held-out selection data")
+        model_selection["quantized"] = evaluate_model_variant(
+            model,
+            holdout_batches,
+            config.model_selection,
+            variant="quantized_sketchawq",
+            method=quant_summary.method,
+        )
+        report["model_selection"] = model_selection
+
     if config.evaluation.enabled:
         LOGGER.info("Evaluating quantized model")
+        assert evaluation_batches is not None
         evaluations["quantized"] = evaluate_model_variant(
             model,
             evaluation_batches,

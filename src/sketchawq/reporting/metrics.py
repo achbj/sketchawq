@@ -61,6 +61,15 @@ RUN_SUMMARY_FIELDS = [
     "nystrom_eigenvalue_floor",
     "normalize_error_terms",
     "benchmark",
+    "model_selection_enabled",
+    "model_selection_benchmark",
+    "model_selection_max_batches",
+    "model_selection_original_loss",
+    "model_selection_original_perplexity",
+    "model_selection_quantized_loss",
+    "model_selection_quantized_perplexity",
+    "model_selection_perplexity_delta",
+    "model_selection_perplexity_ratio",
     "calibration_source",
     "calibration_dataset",
     "calibration_split",
@@ -224,12 +233,19 @@ def build_run_summary_row(report: dict[str, Any], config: SketchAWQConfig) -> di
     evaluation = report.get("evaluation", {})
     original = _variant_evaluation(evaluation, "original")
     quantized = _variant_evaluation(evaluation, "quantized")
+    model_selection = report.get("model_selection", {})
+    selection_original = _variant_evaluation(model_selection, "original")
+    selection_quantized = _variant_evaluation(model_selection, "quantized")
     quantized_ppl = quantized.get("perplexity", {})
     quantized_throughput = quantized.get("throughput", {})
     original_ppl = original.get("perplexity", {})
     original_throughput = original.get("throughput", {})
     original_perplexity = original_ppl.get("perplexity")
     quantized_perplexity = quantized_ppl.get("perplexity")
+    selection_original_ppl = selection_original.get("perplexity", {})
+    selection_quantized_ppl = selection_quantized.get("perplexity", {})
+    selection_original_perplexity = selection_original_ppl.get("perplexity")
+    selection_quantized_perplexity = selection_quantized_ppl.get("perplexity")
     original_tps = original_throughput.get("tokens_per_second")
     quantized_tps = quantized_throughput.get("tokens_per_second")
     metadata = report.get("metadata", {})
@@ -281,6 +297,21 @@ def build_run_summary_row(report: dict[str, Any], config: SketchAWQConfig) -> di
         "nystrom_eigenvalue_floor": config.sketch.nystrom_eigenvalue_floor,
         "normalize_error_terms": config.sketch.normalize_error_terms,
         "benchmark": config.evaluation.benchmark_name,
+        "model_selection_enabled": config.model_selection.enabled,
+        "model_selection_benchmark": config.model_selection.benchmark_name,
+        "model_selection_max_batches": config.model_selection.max_batches,
+        "model_selection_original_loss": selection_original_ppl.get("loss"),
+        "model_selection_original_perplexity": selection_original_perplexity,
+        "model_selection_quantized_loss": selection_quantized_ppl.get("loss"),
+        "model_selection_quantized_perplexity": selection_quantized_perplexity,
+        "model_selection_perplexity_delta": _optional_delta(
+            selection_quantized_perplexity,
+            selection_original_perplexity,
+        ),
+        "model_selection_perplexity_ratio": _optional_ratio(
+            selection_quantized_perplexity,
+            selection_original_perplexity,
+        ),
         "calibration_source": config.calibration.source,
         "calibration_dataset": config.calibration.dataset_name,
         "calibration_split": config.calibration.split,
@@ -352,11 +383,38 @@ def build_evaluation_metric_rows(
     report: dict[str, Any],
     config: SketchAWQConfig,
 ) -> list[dict[str, Any]]:
+    return _build_variant_metric_rows(
+        report,
+        config,
+        section="evaluation",
+        benchmark=config.evaluation.benchmark_name,
+    )
+
+
+def build_model_selection_metric_rows(
+    report: dict[str, Any],
+    config: SketchAWQConfig,
+) -> list[dict[str, Any]]:
+    return _build_variant_metric_rows(
+        report,
+        config,
+        section="model_selection",
+        benchmark=config.model_selection.benchmark_name,
+    )
+
+
+def _build_variant_metric_rows(
+    report: dict[str, Any],
+    config: SketchAWQConfig,
+    *,
+    section: str,
+    benchmark: str,
+) -> list[dict[str, Any]]:
     metadata = report.get("metadata", {})
     environment = metadata.get("environment", {})
     rows: list[dict[str, Any]] = []
     for key in ("original", "quantized"):
-        item = _variant_evaluation(report.get("evaluation", {}), key)
+        item = _variant_evaluation(report.get(section, {}), key)
         if not item:
             continue
         perplexity = item.get("perplexity", {})
@@ -369,7 +427,7 @@ def build_evaluation_metric_rows(
                 "model_repo_id": config.model.repo_id,
                 "method": item.get("method"),
                 "model_variant": item.get("variant", key),
-                "benchmark": item.get("benchmark", config.evaluation.benchmark_name),
+                "benchmark": item.get("benchmark", benchmark),
                 "bits": "" if key == "original" else config.quantization.bits,
                 "group_size": "" if key == "original" else config.quantization.group_size,
                 "loss": perplexity.get("loss"),
@@ -499,6 +557,7 @@ def write_plot_artifacts(
     output_dir = Path(output_dir)
     summary_row = build_run_summary_row(report, config)
     evaluation_rows = build_evaluation_metric_rows(report, config)
+    model_selection_rows = build_model_selection_metric_rows(report, config)
     layer_rows = build_layer_metric_rows(report, config)
 
     (output_dir / "run_summary.json").write_text(
@@ -512,6 +571,13 @@ def write_plot_artifacts(
         fields=EVALUATION_METRIC_FIELDS,
     )
     write_jsonl(evaluation_rows, output_dir / "evaluation_metrics.jsonl")
+    if model_selection_rows:
+        write_csv(
+            model_selection_rows,
+            output_dir / "model_selection_metrics.csv",
+            fields=EVALUATION_METRIC_FIELDS,
+        )
+        write_jsonl(model_selection_rows, output_dir / "model_selection_metrics.jsonl")
     write_csv(layer_rows, output_dir / "layer_metrics.csv", fields=LAYER_METRIC_FIELDS)
     write_jsonl(layer_rows, output_dir / "layer_metrics.jsonl")
 

@@ -6,6 +6,7 @@ from sketchawq.config import SketchAWQConfig
 from sketchawq.reporting.metrics import (
     build_evaluation_metric_rows,
     build_layer_metric_rows,
+    build_model_selection_metric_rows,
     build_run_summary_row,
 )
 
@@ -168,3 +169,43 @@ def test_evaluation_metrics_include_gpu_name() -> None:
     row = build_evaluation_metric_rows(report, config)[0]
 
     assert row["gpu_name"] == "NVIDIA A100-SXM4-40GB"
+
+
+def test_model_selection_metrics_are_reported_separately_from_final_evaluation() -> None:
+    config = SketchAWQConfig()
+    config.calibration.holdout_samples = 32
+    config.calibration.holdout_split = "validation"
+    config.model_selection.enabled = True
+    report = {
+        "metadata": {
+            "run_id": "abc123",
+            "created_at": "2026-07-09T00:00:00+00:00",
+            "run_name": "selection_metrics_test",
+            "environment": {"gpu_name": "NVIDIA A100-SXM4-40GB"},
+        },
+        "output_dir": "artifacts/selection_metrics_test",
+        "quantization": {"method": "SketchAWQ-v0", "layers": []},
+        "evaluation": {},
+        "model_selection": {
+            "original": {
+                "variant": "original_fp16",
+                "method": "FP16",
+                "benchmark": "c4_validation_selection",
+                "perplexity": {"loss": 2.0, "perplexity": 7.4, "batches": 2},
+            },
+            "quantized": {
+                "variant": "quantized_sketchawq",
+                "method": "SketchAWQ-v0",
+                "benchmark": "c4_validation_selection",
+                "perplexity": {"loss": 2.2, "perplexity": 9.0, "batches": 2},
+            },
+        },
+    }
+
+    rows = build_model_selection_metric_rows(report, config)
+    summary = build_run_summary_row(report, config)
+
+    assert [row["perplexity"] for row in rows] == [7.4, 9.0]
+    assert summary["perplexity"] is None
+    assert summary["model_selection_quantized_perplexity"] == 9.0
+    assert summary["model_selection_perplexity_delta"] == pytest.approx(1.6)

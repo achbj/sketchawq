@@ -5,7 +5,7 @@ from typing import Any
 
 import torch
 
-from sketchawq.config import EvaluationConfig
+from sketchawq.config import EvaluationConfig, ModelSelectionConfig
 from sketchawq.eval.perplexity import evaluate_perplexity
 from sketchawq.eval.throughput import measure_forward_tokens_per_second
 
@@ -13,7 +13,7 @@ from sketchawq.eval.throughput import measure_forward_tokens_per_second
 def evaluate_model_variant(
     model: torch.nn.Module,
     batches,
-    config: EvaluationConfig,
+    config: EvaluationConfig | ModelSelectionConfig,
     *,
     variant: str,
     method: str,

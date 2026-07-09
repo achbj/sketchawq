@@ -476,6 +476,31 @@ class EvaluationConfig:
 
 
 @dataclass(slots=True)
+class ModelSelectionConfig:
+    """Evaluate full-model loss on the configured calibration holdout split.
+
+    This is intentionally separate from the final evaluation board. It gives
+    experiment scripts a fixed, disjoint C4 validation signal for choosing
+    between candidate quantization mechanisms without using WikiText2.
+    """
+
+    enabled: bool = False
+    compare_original: bool = True
+    benchmark_name: str = "calibration_holdout_perplexity"
+    max_batches: int | None = None
+    measure_throughput: bool = False
+    throughput_warmup_batches: int = 0
+
+    def validate(self) -> None:
+        if not self.benchmark_name.strip():
+            raise ValueError("model_selection.benchmark_name must not be empty")
+        if self.max_batches is not None and self.max_batches <= 0:
+            raise ValueError("model_selection.max_batches must be positive")
+        if self.throughput_warmup_batches < 0:
+            raise ValueError("model_selection.throughput_warmup_batches must be non-negative")
+
+
+@dataclass(slots=True)
 class OutputConfig:
     run_name: str = "tiny_debug_sketchawq"
     output_dir: str = "artifacts"
@@ -498,6 +523,7 @@ class SketchAWQConfig:
     sketch: SketchConfig = field(default_factory=SketchConfig)
     adaptive: AdaptiveConfig = field(default_factory=AdaptiveConfig)
     calibration: CalibrationConfig = field(default_factory=CalibrationConfig)
+    model_selection: ModelSelectionConfig = field(default_factory=ModelSelectionConfig)
     evaluation: EvaluationConfig = field(default_factory=EvaluationConfig)
     output: OutputConfig = field(default_factory=OutputConfig)
     runtime: RuntimeConfig = field(default_factory=RuntimeConfig)
@@ -516,12 +542,17 @@ class SketchAWQConfig:
                 "adaptive sensitive_group_size must be <= quantization.group_size"
             )
         self.calibration.validate()
+        self.model_selection.validate()
         if (
             self.quantization.scale_refinement_guard == "holdout_output"
             and self.calibration.holdout_samples <= 0
         ):
             raise ValueError(
                 "calibration.holdout_samples must be positive for holdout_output refinement guard"
+            )
+        if self.model_selection.enabled and self.calibration.holdout_samples <= 0:
+            raise ValueError(
+                "calibration.holdout_samples must be positive for model_selection"
             )
         self.evaluation.validate()
 
@@ -539,6 +570,9 @@ def _coerce_config(data: dict[str, Any]) -> SketchAWQConfig:
         ),
         calibration=CalibrationConfig(
             **_known_dataclass_kwargs(CalibrationConfig, data.get("calibration", {}))
+        ),
+        model_selection=ModelSelectionConfig(
+            **_known_dataclass_kwargs(ModelSelectionConfig, data.get("model_selection", {}))
         ),
         evaluation=EvaluationConfig(
             **_known_dataclass_kwargs(EvaluationConfig, data.get("evaluation", {}))
