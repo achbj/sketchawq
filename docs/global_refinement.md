@@ -67,3 +67,8 @@ curvature/output objective and a tied-embedding term. The next mechanism must
 evaluate a refined candidate against a calibration-only output-aware guard,
 then confirm promising changes on an independent calibration split and new
 model/seed before looking at final paper boards.
+
+The independent C4 validation guard was subsequently tested and also rejected:
+it improved W3 from 74.7686 to 54.4967 but remained worse than the 39.0111
+Nystrom control, while W4 moved from 18.8322 to 18.9229. See
+`docs/holdout_refinement_guard.md` for the complete record.

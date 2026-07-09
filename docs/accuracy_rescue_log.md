@@ -280,3 +280,35 @@ Commands:
 scripts/run_global_refinement_ablation.sh both --gpu A100
 scripts/sync_global_refinement_ablation.sh both
 ```
+
+## 2026-07-09 - Disjoint C4 Holdout Guard for Global Refinement
+
+Status:
+- Holdout infrastructure retained; global-refinement treatment rejected.
+
+Protocol:
+- AWQ search and Hessian statistics use the unchanged 256 C4-train chunks.
+- A disjoint 32-sample C4-validation set scores the original and refined
+  candidate per layer using direct output reconstruction plus tied-token error.
+- WikiText2 is not used for candidate selection.
+
+Artifact:
+- `artifacts/holdout_guard/qwen3_4b_holdout_guard_20260709_203700`
+
+Results:
+- W3: Nystrom 39.0111, unguarded global 74.7686, held-out guard 54.4967.
+- W4: Nystrom 18.0479, unguarded global 18.8322, held-out guard 18.9229.
+- The guard accepted 246/253 W3 layers and 250/253 W4 layers.
+
+Decision:
+- Keep the explicit disjoint C4-validation path and layer telemetry.
+- Reject the layer-local guard as a way to rescue global scale coupling.
+- Future candidates require full-model held-out loss selection before any final
+  WikiText2 comparison.
+
+Commands:
+
+```bash
+scripts/run_holdout_guard_ablation.sh both --gpu A100
+scripts/sync_holdout_guard_ablation.sh both
+```

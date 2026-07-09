@@ -914,3 +914,52 @@ Next action:
 - Add a calibration-only output-aware acceptance guard for post-search
   refinements, then confirm any improvement on a held-out calibration split,
   alternate seed, and cross-model board.
+
+### 2026-07-09 - Held-Out Output Guard for Global Refinement
+
+Status:
+- Rejected as an accuracy treatment; retained as evaluation infrastructure.
+
+Git:
+- Data holdout: `f06eb22`
+- Guard config: `1b37a57`
+- Scoring: `e83b9a8`
+- Pipeline/reporting: `56cf519`
+- W3/W4 controls: `93f18bc`
+
+Command:
+
+```bash
+scripts/run_holdout_guard_ablation.sh both --gpu A100
+scripts/sync_holdout_guard_ablation.sh both
+```
+
+Artifact:
+- `artifacts/holdout_guard/qwen3_4b_holdout_guard_20260709_203700`
+
+Setup:
+- Model: `Qwen/Qwen3-4B`, FP16, default revision.
+- Method: global Nystrom refinement with a holdout-output candidate guard.
+- Bits/group size: symmetric W3 and W4, g128.
+- Search/sketch calibration: C4 train, 256 packed 2048-token samples, seed 42.
+- Selection-only calibration: C4 validation, 32 packed 2048-token samples.
+- Final evaluation: packed WikiText2 validation at 2048 tokens.
+- GPU: NVIDIA A100-SXM4-40GB.
+
+Results:
+
+| Bits | Nystrom PPL | Unguarded global PPL | Guarded PPL | Accepted layers |
+| ---: | ---: | ---: | ---: | ---: |
+| 3 | 39.0111 | 74.7686 | 54.4967 | 246 / 253 |
+| 4 | 18.0479 | 18.8322 | 18.9229 | 250 / 253 |
+
+Decision:
+- The C4 validation holdout path behaves correctly, including sensible tied
+  embedding decisions, but layer-local reconstruction does not predict
+  full-model PPL well enough to rescue global coupling.
+- Keep the infrastructure. Reject global refinement and do not tune it on
+  WikiText2.
+
+Next action:
+- Select future mechanisms by full-model held-out loss before final evaluation,
+  then confirm any winner under a separate seed and model family.
