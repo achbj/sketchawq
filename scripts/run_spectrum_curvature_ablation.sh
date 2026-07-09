@@ -32,7 +32,7 @@ normalize_bits() {
 }
 
 config_for() {
-  echo "configs/experiments/spectrum_curvature/qwen3_4b_${1}bit_nystrom.yaml"
+  echo "configs/experiments/spectrum_curvature/qwen3_4b_${1}bit_nystrom_residual.yaml"
 }
 
 print_command() {

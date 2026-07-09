@@ -21,7 +21,7 @@ def test_nystrom_controls_preserve_the_strict_budget_protocol(bits: int) -> None
         / "configs"
         / "experiments"
         / "spectrum_curvature"
-        / f"qwen3_4b_{bits}bit_nystrom.yaml"
+        / f"qwen3_4b_{bits}bit_nystrom_residual.yaml"
     )
 
     assert nystrom.model.repo_id == control.model.repo_id
@@ -35,7 +35,7 @@ def test_nystrom_controls_preserve_the_strict_budget_protocol(bits: int) -> None
     assert nystrom.evaluation.sequence_length == control.evaluation.sequence_length == 2048
     assert nystrom.sketch.rank == control.sketch.rank == 64
     assert nystrom.sketch.low_rank_representation == "nystrom"
-    assert nystrom.output.run_name == f"qwen3_4b_{bits}bit_nystrom_g128_control"
+    assert nystrom.output.run_name == f"qwen3_4b_{bits}bit_nystrom_residual_g128_control"
 
 
 def test_nystrom_launcher_dry_runs_both_bits() -> None:
@@ -55,8 +55,8 @@ def test_nystrom_launcher_dry_runs_both_bits() -> None:
 
     assert "SKETCHAWQ_MODAL_GPU=A100" in result.stdout
     assert "infra/modal/sketchawq_app.py" in result.stdout
-    assert "qwen3_4b_3bit_nystrom.yaml" in result.stdout
-    assert "qwen3_4b_4bit_nystrom.yaml" in result.stdout
+    assert "qwen3_4b_3bit_nystrom_residual.yaml" in result.stdout
+    assert "qwen3_4b_4bit_nystrom_residual.yaml" in result.stdout
 
 
 def test_nystrom_sync_dry_run_fetches_frozen_controls_and_new_rows() -> None:
@@ -74,7 +74,7 @@ def test_nystrom_sync_dry_run_fetches_frozen_controls_and_new_rows() -> None:
 
     assert result.stdout.count("volume get") == 4
     assert "qwen3_4b_3bit_strict_g128_control" in result.stdout
-    assert "qwen3_4b_3bit_nystrom_g128_control" in result.stdout
+    assert "qwen3_4b_3bit_nystrom_residual_g128_control" in result.stdout
     assert "qwen3_4b_4bit_strict_g128_control" in result.stdout
-    assert "qwen3_4b_4bit_nystrom_g128_control" in result.stdout
+    assert "qwen3_4b_4bit_nystrom_residual_g128_control" in result.stdout
     assert "sketchawq.experiments.compare_methods" in result.stdout

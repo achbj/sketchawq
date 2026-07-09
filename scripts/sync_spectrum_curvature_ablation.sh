@@ -34,7 +34,7 @@ strict_run_name_for() {
 }
 
 nystrom_run_name_for() {
-  echo "qwen3_4b_${1}bit_nystrom_g128_control"
+  echo "qwen3_4b_${1}bit_nystrom_residual_g128_control"
 }
 
 print_command() {
