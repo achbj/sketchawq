@@ -46,6 +46,13 @@ SCALE_REFINEMENT_ALIASES = {
     "curvature": "sketch",
     "sketch_conditioned": "sketch",
 }
+TIED_WEIGHT_STRATEGIES = {"joint_embedding", "output_only"}
+TIED_WEIGHT_STRATEGY_ALIASES = {
+    "joint": "joint_embedding",
+    "embedding": "joint_embedding",
+    "legacy": "output_only",
+    "off": "output_only",
+}
 ROW_SAMPLING_MODES = {"random", "linspace"}
 ROW_SAMPLING_ALIASES = {
     "seeded_random": "random",
@@ -111,6 +118,8 @@ class QuantizationConfig:
     hessian_error_weight: float = 1.0
     scale_refinement: str = "none"
     scale_refinement_steps: int = 3
+    tied_weight_strategy: str = "joint_embedding"
+    tied_embedding_error_weight: float = 1.0
 
     def validate(self) -> None:
         if self.bits not in {2, 3, 4, 8}:
@@ -175,6 +184,16 @@ class QuantizationConfig:
                 raise ValueError(
                     "sketch scale refinement currently requires symmetric quantization"
                 )
+        self.tied_weight_strategy = self.tied_weight_strategy.strip().lower().replace("-", "_")
+        self.tied_weight_strategy = TIED_WEIGHT_STRATEGY_ALIASES.get(
+            self.tied_weight_strategy,
+            self.tied_weight_strategy,
+        )
+        if self.tied_weight_strategy not in TIED_WEIGHT_STRATEGIES:
+            allowed = ", ".join(sorted(TIED_WEIGHT_STRATEGIES))
+            raise ValueError(f"tied_weight_strategy must be one of {allowed}")
+        if self.tied_embedding_error_weight < 0:
+            raise ValueError("tied_embedding_error_weight must be non-negative")
 
 
 @dataclass(slots=True)

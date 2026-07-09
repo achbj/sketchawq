@@ -8,6 +8,7 @@ from sketchawq.config import OutlierConfig, QuantizationConfig, SketchConfig
 from sketchawq.quant.awq_scale_search import (
     _candidate_search_score,
     _fake_quantize_candidate,
+    _tied_embedding_score,
 )
 from sketchawq.quant.hessian_sketch import HessianSketch
 from sketchawq.quant.outliers import (
@@ -20,6 +21,7 @@ from sketchawq.quant.outliers import (
 class ClipSearchResult:
     clip_ratio: float
     score: float
+    tied_embedding_score: float | None
 
 
 def search_clip_ratio(
@@ -31,6 +33,7 @@ def search_clip_ratio(
     outlier_config: OutlierConfig | None = None,
     outlier_selection: OutlierSelection | None = None,
     activation_rows: torch.Tensor | None = None,
+    tied_embedding_row_weights: torch.Tensor | None = None,
 ) -> ClipSearchResult:
     outlier_config = outlier_config or OutlierConfig()
     best: ClipSearchResult | None = None
@@ -57,8 +60,18 @@ def search_clip_ratio(
             quant_config=quant_config,
             sketch_config=sketch_config,
             activation_rows=activation_rows,
+            tied_embedding_row_weights=tied_embedding_row_weights,
+            tied_embedding_error_weight=quant_config.tied_embedding_error_weight,
         )
-        result = ClipSearchResult(clip_ratio=float(clip_ratio), score=score)
+        result = ClipSearchResult(
+            clip_ratio=float(clip_ratio),
+            score=score,
+            tied_embedding_score=_tied_embedding_score(
+                weight,
+                candidate,
+                row_weights=tied_embedding_row_weights,
+            ),
+        )
         if best is None or result.score < best.score:
             best = result
     if best is None:

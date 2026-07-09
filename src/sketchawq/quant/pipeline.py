@@ -10,6 +10,7 @@ from tqdm.auto import tqdm
 
 from sketchawq.config import SketchAWQConfig
 from sketchawq.models.layers import iter_named_linears
+from sketchawq.models.tied import TiedLinearWeight, find_tied_linear_weights
 from sketchawq.quant.adaptive import LayerAdaptiveInput, build_layer_adaptive_plans
 from sketchawq.quant.awq_scale_search import search_awq_scale_and_clip
 from sketchawq.quant.hessian_sketch import build_hessian_sketch
@@ -63,11 +64,15 @@ class LayerQuantizationSummary:
     outlier_scale_boost: float
     outlier_channels: int
     protected_channels: int
+    tied_weight_names: tuple[str, ...]
+    uses_tied_embedding_objective: bool
+    tied_embedding_score: float | None
 
 
 @dataclass(frozen=True, slots=True)
 class PackedLayerArtifact:
     name: str
+    weight_names: tuple[str, ...]
     packed_weight: torch.Tensor
     scale: torch.Tensor
     zero_point: torch.Tensor | None
@@ -161,6 +166,7 @@ def quantize_model(
     build_packed_artifacts = config.output.save_model
     phase_start = time.perf_counter()
     named_linears = list(iter_named_linears(model))
+    tied_weights = find_tied_linear_weights(model, named_linears)
     sketches_by_name = {}
     adaptive_inputs: list[LayerAdaptiveInput] = []
     for name, module in named_linears:
@@ -180,7 +186,14 @@ def quantize_model(
     adaptive_plans = build_layer_adaptive_plans(adaptive_inputs, config)
     timings["prepare_sketches_seconds"] = time.perf_counter() - phase_start
     LOGGER.info("Quantizing %d Linear layers", len(named_linears))
-    method = _method_label(config)
+    method = _method_label(
+        config,
+        uses_tied_embedding_objective=any(
+            tied.shared_with_input_embedding
+            for tied in tied_weights.values()
+        )
+        and config.quantization.tied_weight_strategy == "joint_embedding",
+    )
 
     phase_start = time.perf_counter()
     for name, module in tqdm(named_linears, desc="SketchAWQ layers"):
@@ -191,6 +204,7 @@ def quantize_model(
             continue
 
         weight = module.weight.detach()
+        tied_weight = tied_weights[name]
         sketch = sketches_by_name.get(name)
         if sketch is None:
             sketch = build_hessian_sketch(stats, config.sketch)
@@ -207,6 +221,12 @@ def quantize_model(
         )
         effective_quant_config = replace(config.quantization, group_size=group_size)
         effective_outlier_config = replace(config.outliers, fraction=outlier_fraction)
+        tied_embedding_row_weights = _tied_embedding_row_weights(
+            stats_result.token_histogram,
+            tied_weight,
+            output_features=module.out_features,
+            strategy=effective_quant_config.tied_weight_strategy,
+        )
         outlier_selection = select_outlier_channels(
             weight,
             stats.mean_abs,
@@ -222,6 +242,7 @@ def quantize_model(
             outlier_config=effective_outlier_config,
             outlier_selection=outlier_selection,
             activation_rows=stats.activation_sample,
+            tied_embedding_row_weights=tied_embedding_row_weights,
         )
         quantized = quantize_weight_with_input_scale(
             weight,
@@ -267,6 +288,7 @@ def quantize_model(
             packed_layers.append(
                 PackedLayerArtifact(
                     name=name,
+                    weight_names=tied_weight.weight_names,
                     packed_weight=packed.packed_weight,
                     scale=packed.scale,
                     zero_point=packed.zero_point,
@@ -342,6 +364,9 @@ def quantize_model(
                 outlier_scale_boost=effective_outlier_config.scale_boost,
                 outlier_channels=outlier_selection.count,
                 protected_channels=protected_channels,
+                tied_weight_names=tied_weight.weight_names,
+                uses_tied_embedding_objective=tied_embedding_row_weights is not None,
+                tied_embedding_score=search_result.tied_embedding_score,
             )
         )
 
@@ -386,11 +411,20 @@ def _estimate_quantized_storage(
     weight_values = module.weight.numel()
     groups_per_row = math.ceil(module.in_features / group_size)
     group_count = module.out_features * groups_per_row
-    quantized_weight_bytes = weight_values * bits / 8
+    quantized_weight_bytes = math.ceil(weight_values * bits / 8)
     scale_bytes = group_count * 4
     zero_point_bytes = 0 if symmetric else group_count * 4
     protected_bytes = module.out_features * protected_channels * protected_bits / 8
-    total_bytes = quantized_weight_bytes + scale_bytes + zero_point_bytes + protected_bytes
+    input_scale_bytes = module.in_features * 4
+    protected_index_bytes = protected_channels * 8
+    total_bytes = (
+        quantized_weight_bytes
+        + scale_bytes
+        + zero_point_bytes
+        + protected_bytes
+        + input_scale_bytes
+        + protected_index_bytes
+    )
     total_mb = total_bytes / 1_000_000
     fp16_mb = weight_values * 2 / 1_000_000
     ratio = fp16_mb / max(total_mb, 1e-12)
@@ -423,7 +457,11 @@ def _join_unique(values: list[str]) -> str | None:
     return ";".join(values)
 
 
-def _method_label(config: SketchAWQConfig) -> str:
+def _method_label(
+    config: SketchAWQConfig,
+    *,
+    uses_tied_embedding_objective: bool = False,
+) -> str:
     if not config.sketch.uses_diagonal():
         label = "AWQ-only-v0"
     elif not config.sketch.uses_low_rank():
@@ -438,5 +476,28 @@ def _method_label(config: SketchAWQConfig) -> str:
         label = f"{label}-outlier-{config.outliers.strategy}-v0"
     if config.adaptive.enabled:
         label = label.removesuffix("-v0")
-        return f"{label}-adaptive-v0"
+        label = f"{label}-adaptive-v0"
+    if uses_tied_embedding_objective:
+        label = label.removesuffix("-v0")
+        return f"{label}-tied-embedding-v1"
     return label
+
+
+def _tied_embedding_row_weights(
+    token_histogram: torch.Tensor | None,
+    tied_weight: TiedLinearWeight,
+    *,
+    output_features: int,
+    strategy: str,
+) -> torch.Tensor | None:
+    if strategy != "joint_embedding" or not tied_weight.shared_with_input_embedding:
+        return None
+    if token_histogram is None or token_histogram.numel() == 0:
+        return None
+    if token_histogram.numel() < output_features:
+        token_histogram = torch.nn.functional.pad(
+            token_histogram,
+            (0, output_features - token_histogram.numel()),
+        )
+    weights = token_histogram[:output_features].to(dtype=torch.float32)
+    return weights if torch.any(weights > 0) else None

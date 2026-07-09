@@ -31,7 +31,7 @@ def test_pipeline_runs_on_tiny_random_gpt2() -> None:
 
     report = quantize_model(model, [batch], config)
     assert report.num_layers > 0
-    assert report.method == "SketchAWQ-diagonal-low-rank-v0"
+    assert report.method == "SketchAWQ-diagonal-low-rank-tied-embedding-v1"
     assert report.timings["collect_stats_seconds"] >= 0
     assert report.timings["stats_batches"] == 1
     assert report.timings["stats_tokens"] == 16
@@ -49,6 +49,8 @@ def test_pipeline_runs_on_tiny_random_gpt2() -> None:
     assert report.packed_layers
     assert all(layer.packed_weight.dtype == torch.uint8 for layer in report.packed_layers)
     assert {layer.name for layer in report.packed_layers} == {layer.name for layer in report.layers}
+    assert report.layers[0].uses_tied_embedding_objective is True
+    assert set(report.layers[0].tied_weight_names) == {"lm_head.weight", "transformer.wte.weight"}
 
 
 def test_pipeline_skips_packed_layers_when_model_export_is_disabled() -> None:
@@ -100,7 +102,7 @@ def test_pipeline_labels_awq_only_ablation() -> None:
 
     report = quantize_model(model, [batch], config)
 
-    assert report.method == "AWQ-only-v0"
+    assert report.method == "AWQ-only-tied-embedding-v1"
     assert report.layers
     assert {layer.sketch_mode for layer in report.layers} == {"none"}
     assert not any(layer.uses_diagonal for layer in report.layers)

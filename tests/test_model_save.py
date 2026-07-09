@@ -58,4 +58,7 @@ def test_save_quantized_artifacts_writes_packed_model_instead_of_dense_simulatio
     first_layer = manifest["layers"][0]
     assert first_layer["packed_weight"] in tensors
     assert first_layer["scale"] in tensors
+    assert set(first_layer["weight_names"]) == {"lm_head.weight", "transformer.wte.weight"}
+    assert "lm_head.weight" not in tensors
+    assert "transformer.wte.weight" not in tensors
     assert not (output_dir / "model").exists()

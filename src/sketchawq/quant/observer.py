@@ -93,6 +93,7 @@ class LayerStats:
 class StatsCollectionResult:
     stats: dict[str, LayerStats]
     timings: dict[str, float | int | bool]
+    token_histogram: torch.Tensor | None
 
 
 class ActivationObserver:
@@ -361,6 +362,7 @@ def collect_layer_stats_with_summary(
     )
     batches = 0
     tokens = 0
+    token_histogram: torch.Tensor | None = None
     all_ones_mask_batches = 0
     masked_batches = 0
     use_cache_disabled = _model_accepts_use_cache(model)
@@ -373,6 +375,11 @@ def collect_layer_stats_with_summary(
             for batch in calibration_batches:
                 kwargs = _as_model_kwargs(batch)
                 attention_mask = kwargs.get("attention_mask")
+                token_histogram = _update_token_histogram(
+                    token_histogram,
+                    kwargs.get("input_ids"),
+                    attention_mask,
+                )
                 all_ones_mask, mask_tokens = _attention_mask_status(attention_mask)
                 tokens += mask_tokens if mask_tokens is not None else _input_token_count(kwargs)
                 if all_ones_mask:
@@ -406,7 +413,31 @@ def collect_layer_stats_with_summary(
             "stats_attention_mask_fast_path_batches": all_ones_mask_batches,
             "stats_masked_batches": masked_batches,
         },
+        token_histogram=token_histogram,
     )
+
+
+def _update_token_histogram(
+    histogram: torch.Tensor | None,
+    input_ids: torch.Tensor | None,
+    attention_mask: torch.Tensor | None,
+) -> torch.Tensor | None:
+    if input_ids is None or input_ids.numel() == 0:
+        return histogram
+    token_ids = input_ids.detach().to(device="cpu", dtype=torch.long).reshape(-1)
+    if attention_mask is not None and attention_mask.shape == input_ids.shape:
+        valid = attention_mask.detach().to(device="cpu", dtype=torch.bool).reshape(-1)
+        token_ids = token_ids[valid]
+    token_ids = token_ids[token_ids >= 0]
+    if token_ids.numel() == 0:
+        return histogram
+    counts = torch.bincount(token_ids)
+    if histogram is None:
+        return counts
+    if counts.numel() > histogram.numel():
+        histogram = torch.nn.functional.pad(histogram, (0, counts.numel() - histogram.numel()))
+    histogram[: counts.numel()].add_(counts)
+    return histogram
 
 
 def _as_model_kwargs(batch: Any) -> dict[str, Any]:

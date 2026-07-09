@@ -77,3 +77,34 @@ def output_error_score(
         denominator = output.pow(2).mean().clamp_min(1e-12)
         score = score / denominator
     return float(score.detach().cpu())
+
+
+def row_weighted_error_score(
+    original: torch.Tensor,
+    candidate: torch.Tensor,
+    row_weights: torch.Tensor,
+    *,
+    normalize_terms: bool = True,
+) -> float:
+    """Measure reconstruction error with a probability mass over output rows.
+
+    Tied token embeddings are used both as output-projection rows and as input
+    lookup rows. Calibration token frequency provides a simple, data-free
+    surrogate for the latter use without changing the quantization budget.
+    """
+    if original.ndim != 2 or candidate.shape != original.shape:
+        raise ValueError("original and candidate must be matching two-dimensional tensors")
+    weights = row_weights.detach().to(device=original.device, dtype=torch.float32).flatten()
+    if weights.shape[0] != original.shape[0]:
+        raise ValueError("row_weights must have one value per output row")
+    weights = weights.clamp_min(0)
+    if not torch.any(weights > 0):
+        return 0.0
+    weights = weights / weights.sum()
+    original_float = original.float().detach()
+    error = original_float - candidate.float().detach()
+    score = (error.square().mean(dim=1) * weights).sum()
+    if normalize_terms:
+        denominator = (original_float.square().mean(dim=1) * weights).sum().clamp_min(1e-12)
+        score = score / denominator
+    return float(score.detach().cpu())

@@ -6,7 +6,7 @@ import torch
 
 from sketchawq.config import OutlierConfig, QuantizationConfig, SketchConfig
 from sketchawq.quant.hessian_sketch import HessianSketch
-from sketchawq.quant.loss import output_error_score, weighted_error_score
+from sketchawq.quant.loss import row_weighted_error_score, output_error_score, weighted_error_score
 from sketchawq.quant.outliers import (
     OutlierSelection,
     _column_mean_abs,
@@ -35,6 +35,7 @@ class ScaleClipSearchResult:
     score: float
     scale_score: float | None
     clip_score: float | None
+    tied_embedding_score: float | None
 
 
 def search_awq_scale_and_clip(
@@ -46,6 +47,7 @@ def search_awq_scale_and_clip(
     outlier_config: OutlierConfig | None = None,
     outlier_selection: OutlierSelection | None = None,
     activation_rows: torch.Tensor | None = None,
+    tied_embedding_row_weights: torch.Tensor | None = None,
 ) -> ScaleClipSearchResult:
     """Choose AWQ input scaling and clipping jointly by default.
 
@@ -74,6 +76,7 @@ def search_awq_scale_and_clip(
             outlier_config=outlier_config,
             outlier_selection=outlier_selection,
             activation_rows=activation_rows,
+            tied_embedding_row_weights=tied_embedding_row_weights,
         )
         clip_result = search_clip_ratio(
             weight,
@@ -84,6 +87,7 @@ def search_awq_scale_and_clip(
             outlier_config=outlier_config,
             outlier_selection=outlier_selection,
             activation_rows=activation_rows,
+            tied_embedding_row_weights=tied_embedding_row_weights,
         )
         return ScaleClipSearchResult(
             scales=scale_result.scales,
@@ -92,6 +96,7 @@ def search_awq_scale_and_clip(
             score=clip_result.score,
             scale_score=scale_result.score,
             clip_score=clip_result.score,
+            tied_embedding_score=clip_result.tied_embedding_score,
         )
 
     best: ScaleClipSearchResult | None = None
@@ -127,6 +132,13 @@ def search_awq_scale_and_clip(
                 quant_config=quant_config,
                 sketch_config=sketch_config,
                 activation_rows=activation_rows,
+                tied_embedding_row_weights=tied_embedding_row_weights,
+                tied_embedding_error_weight=quant_config.tied_embedding_error_weight,
+            )
+            tied_embedding_score = _tied_embedding_score(
+                weight,
+                candidate,
+                row_weights=tied_embedding_row_weights,
             )
             result = ScaleClipSearchResult(
                 scales=scales.cpu(),
@@ -135,6 +147,7 @@ def search_awq_scale_and_clip(
                 score=score,
                 scale_score=None,
                 clip_score=None,
+                tied_embedding_score=tied_embedding_score,
             )
             if best is None or result.score < best.score:
                 best = result
@@ -152,6 +165,7 @@ def search_awq_scales(
     outlier_config: OutlierConfig | None = None,
     outlier_selection: OutlierSelection | None = None,
     activation_rows: torch.Tensor | None = None,
+    tied_embedding_row_weights: torch.Tensor | None = None,
 ) -> ScaleSearchResult:
     """Choose an AWQ-style input-channel scale using a tiny candidate search."""
     outlier_config = outlier_config or OutlierConfig()
@@ -194,6 +208,8 @@ def search_awq_scales(
             quant_config=quant_config,
             sketch_config=sketch_config,
             activation_rows=activation_rows,
+            tied_embedding_row_weights=tied_embedding_row_weights,
+            tied_embedding_error_weight=quant_config.tied_embedding_error_weight,
         )
         result = ScaleSearchResult(scales=scales.cpu(), alpha=float(alpha), score=score)
         if best is None or result.score < best.score:
@@ -295,6 +311,8 @@ def _candidate_search_score(
     quant_config: QuantizationConfig,
     sketch_config: SketchConfig,
     activation_rows: torch.Tensor | None = None,
+    tied_embedding_row_weights: torch.Tensor | None = None,
+    tied_embedding_error_weight: float = 0.0,
 ) -> float:
     weighted_score = None
     if quant_config.search_objective in {"weighted_error", "hybrid"}:
@@ -308,18 +326,33 @@ def _candidate_search_score(
         )
     if quant_config.search_objective == "weighted_error":
         assert weighted_score is not None
-        return float(weighted_score)
+        primary_score = float(weighted_score)
+        return _with_tied_embedding_score(
+            primary_score,
+            weight,
+            candidate,
+            row_weights=tied_embedding_row_weights,
+            error_weight=tied_embedding_error_weight,
+        )
 
     if activation_rows is None or activation_rows.numel() == 0:
         if weighted_score is not None:
-            return float(weighted_score)
-        return weighted_error_score(
+            primary_score = float(weighted_score)
+        else:
+            primary_score = weighted_error_score(
             weight,
             candidate,
             diagonal=sketch.diagonal,
             basis=sketch.basis,
             low_rank_weight=sketch_config.low_rank_weight,
             normalize_terms=sketch_config.normalize_error_terms,
+        )
+        return _with_tied_embedding_score(
+            primary_score,
+            weight,
+            candidate,
+            row_weights=tied_embedding_row_weights,
+            error_weight=tied_embedding_error_weight,
         )
 
     output_score = output_error_score(
@@ -329,10 +362,47 @@ def _candidate_search_score(
         normalize_terms=sketch_config.normalize_error_terms,
     )
     if quant_config.search_objective == "output_error":
-        return float(output_score)
+        primary_score = float(output_score)
+    else:
+        assert weighted_score is not None
+        primary_score = float(
+            quant_config.hessian_error_weight * weighted_score
+            + quant_config.output_error_weight * output_score
+        )
+    return _with_tied_embedding_score(
+        primary_score,
+        weight,
+        candidate,
+        row_weights=tied_embedding_row_weights,
+        error_weight=tied_embedding_error_weight,
+    )
 
-    assert weighted_score is not None
-    return float(
-        quant_config.hessian_error_weight * weighted_score
-        + quant_config.output_error_weight * output_score
+
+def _with_tied_embedding_score(
+    primary_score: float,
+    weight: torch.Tensor,
+    candidate: torch.Tensor,
+    *,
+    row_weights: torch.Tensor | None,
+    error_weight: float,
+) -> float:
+    tied_score = _tied_embedding_score(weight, candidate, row_weights=row_weights)
+    if tied_score is None or error_weight == 0:
+        return float(primary_score)
+    return float(primary_score + error_weight * tied_score)
+
+
+def _tied_embedding_score(
+    weight: torch.Tensor,
+    candidate: torch.Tensor,
+    *,
+    row_weights: torch.Tensor | None,
+) -> float | None:
+    if row_weights is None or row_weights.numel() == 0:
+        return None
+    return row_weighted_error_score(
+        weight,
+        candidate,
+        row_weights,
+        normalize_terms=True,
     )

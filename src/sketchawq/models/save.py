@@ -8,6 +8,7 @@ import torch
 from safetensors.torch import save_file
 
 from sketchawq.config import SketchAWQConfig, config_to_dict
+from sketchawq.models.tied import base_tensor_aliases
 from sketchawq.quant.pipeline import PackedLayerArtifact
 from sketchawq.reporting.metrics import write_plot_artifacts
 
@@ -66,10 +67,19 @@ def save_packed_model_artifacts(
     output_dir = Path(output_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
 
-    quantized_weight_names = {f"{layer.name}.weight" for layer in packed_layers}
+    quantized_weight_names = {
+        weight_name
+        for layer in packed_layers
+        for weight_name in layer.weight_names
+    }
+    state_dict = model.state_dict()
+    base_aliases = base_tensor_aliases(
+        state_dict,
+        excluded_names=quantized_weight_names,
+    )
     tensors: dict[str, torch.Tensor] = {}
-    for name, tensor in model.state_dict().items():
-        if name in quantized_weight_names:
+    for name, tensor in state_dict.items():
+        if name in quantized_weight_names or name in base_aliases:
             continue
         tensors[name] = tensor.detach().cpu().contiguous()
 
@@ -100,6 +110,7 @@ def save_packed_model_artifacts(
             {
                 "name": layer.name,
                 "weight": f"{layer.name}.weight",
+                "weight_names": list(layer.weight_names),
                 "packed_weight": packed_key,
                 "scale": scale_key,
                 "zero_point": zero_point_key,
@@ -121,6 +132,7 @@ def save_packed_model_artifacts(
             "model_revision": config.model.revision,
             "dtype": config.model.dtype,
             "layers": manifest_layers,
+            "base_tensor_aliases": base_aliases,
             "base_tensor_count": len(tensors)
             - sum(_layer_tensor_count(layer) for layer in manifest_layers),
         },
