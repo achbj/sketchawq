@@ -1,6 +1,6 @@
 # SketchAWQ Project Status Roadmap
 
-Last updated: 2026-05-15
+Last updated: 2026-07-09
 
 This document is the working status board for the clean SketchAWQ checkout. It
 tracks which result rows are trustworthy, which robustness checks exist, and
@@ -38,6 +38,23 @@ the clean checkout only.
 | Qwen3-8B | C4 validation 2048 | 4 | 15.973 | 16.098 | 102.71s | 937.93s | Robustness quality win, about 9.1x faster |
 | Qwen3-32B | WikiText2 validation 2048 | 3 | Not synced | Not synced | Not synced | Not synced | Configured, needs run/sync |
 | Qwen3-32B | WikiText2 validation 2048 | 4 | Not synced | Not synced | Not synced | Not synced | Configured, needs run/sync |
+
+## Latest Development Candidate
+
+This is a controlled SketchAWQ ablation, not a replacement for the historical
+baseline table above and not a GPTQ comparison. It has passed one held-out C4
+selection board and one independent WikiText2 confirmation board on Qwen3-4B.
+
+| Bits | C4 refined control PPL | C4 sequential PPL | WikiText2 control PPL | WikiText2 sequential PPL | Decision |
+| ---: | ---: | ---: | ---: | ---: | --- |
+| 3 | 36.3325 | 35.2573 | 27.1890 | 26.8635 | Keep fixed candidate |
+| 4 | 25.1709 | 24.8391 | 16.7909 | 16.5875 | Keep fixed candidate |
+
+- Mechanism: fixed 1024-column sequential sketch error compensation after
+  local scale refinement.
+- Required before broader quality claims: unchanged settings on an alternate
+  C4 calibration seed and a second model family.
+- Evidence and reproducible commands: `docs/sequential_compensation.md`.
 
 Coverage notes:
 
@@ -128,6 +145,12 @@ Decision rules:
 
 ### Step 4: Accuracy/PPL Improvement Track
 
+- [x] Select and confirm one fixed sequential sketch compensation treatment on
+      Qwen3-4B W3/W4 without using WikiText2 to choose its parameters.
+- [ ] Re-run the fixed sequential treatment with an alternate C4 calibration
+      seed before any new parameter changes.
+- [ ] Confirm the fixed sequential treatment on a second model family before a
+      paper-facing or SOTA claim.
 - [ ] First test safer calibration changes: mixed calibration text, more
       calibration samples, and matched final sequence length.
 - [ ] Track every accuracy rescue experiment against effective bpw so smaller

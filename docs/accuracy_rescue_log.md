@@ -346,3 +346,44 @@ Commands:
 scripts/run_model_selection_ablation.sh both --gpu A100
 scripts/sync_model_selection_ablation.sh both
 ```
+
+## 2026-07-09 - Sequential Sketch Error Compensation
+
+Status:
+- Promoted as the fixed Qwen3-4B W3/W4 development candidate after held-out
+  C4 selection and independent WikiText2 confirmation.
+
+Protocol:
+- The treatment is fixed 1024-column sequential sketch compensation after the
+  existing local scale refinement.
+- Selection used 256 packed C4-train samples and a disjoint 32-sample packed
+  C4-validation board at 2048 tokens.
+- WikiText2 was disabled during selection. The confirmation runs used the same
+  C4-train calibration but no C4-validation holdout, and evaluated full packed
+  WikiText2 validation at 2048 tokens.
+- Control and treatment differ only in `error_compensation`.
+
+Artifacts:
+- `artifacts/sequential_compensation/qwen3_4b_sequential_compensation_20260709_221500`
+- `artifacts/sequential_compensation/confirmation/qwen3_4b_sequential_compensation_confirmation_20260709_222500`
+
+Results:
+- C4 heldout W3: 36.3325 to 35.2573 PPL.
+- C4 heldout W4: 25.1709 to 24.8391 PPL.
+- WikiText2 W3: 27.1890 to 26.8635 PPL.
+- WikiText2 W4: 16.7909 to 16.5875 PPL.
+
+Decision:
+- Retain sequential compensation as a fixed candidate. The gains agree across
+  both target widths and both disjoint evaluation boards.
+- Do not claim SOTA or retune this mechanism on WikiText2. Confirm unchanged
+  settings with an alternate C4 calibration seed and a second model family.
+
+Commands:
+
+```bash
+scripts/run_sequential_compensation_ablation.sh both --variant sequential --gpu A100
+scripts/sync_sequential_compensation_ablation.sh both
+scripts/run_sequential_compensation_confirmation.sh both --variant both --gpu A100
+scripts/sync_sequential_compensation_confirmation.sh both
+```

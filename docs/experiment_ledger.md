@@ -1008,3 +1008,56 @@ Decision:
 Next action:
 - Test one fixed sequential error-compensation mechanism against the refined
   control only, then reject or promote it using this selection board.
+
+### 2026-07-09 - Sequential Sketch Error Compensation
+
+Status:
+- Promoted to the fixed Qwen3-4B W3/W4 development candidate.
+
+Git:
+- Implementation: `d460d97`
+- Experiment controls: `3bc0e76`
+- WikiText2 confirmation harness: `6b026ec`
+
+Commands:
+
+```bash
+scripts/run_sequential_compensation_ablation.sh both --variant sequential --gpu A100
+scripts/sync_sequential_compensation_ablation.sh both
+scripts/run_sequential_compensation_confirmation.sh both --variant both --gpu A100
+scripts/sync_sequential_compensation_confirmation.sh both
+```
+
+Artifacts:
+- `artifacts/sequential_compensation/qwen3_4b_sequential_compensation_20260709_221500`
+- `artifacts/sequential_compensation/confirmation/qwen3_4b_sequential_compensation_confirmation_20260709_222500`
+
+Setup:
+- Model: `Qwen/Qwen3-4B`, FP16, default revision.
+- Bits/group size: symmetric W3 and W4, g128.
+- Control: existing diagonal plus low-rank local scale refinement.
+- Treatment: the same control plus fixed 1024-column sequential sketch error
+  compensation with a Woodbury low-rank solve.
+- Search calibration: C4 train, 256 packed 2048-token samples, seed 42.
+- Selection board: disjoint C4 validation, 32 packed 2048-token samples.
+- Confirmation board: full packed WikiText2 validation at 2048 tokens, with no
+  C4-validation holdout loaded.
+- GPU: NVIDIA A100-SXM4-40GB.
+
+Results:
+
+| Bits | Refined C4 control PPL | Sequential C4 PPL | WikiText2 control PPL | WikiText2 sequential PPL | WikiText2 control/treatment time |
+| ---: | ---: | ---: | ---: | ---: | ---: |
+| 3 | 36.3325 | 35.2573 | 27.1890 | 26.8635 | 78.20s / 79.66s |
+| 4 | 25.1709 | 24.8391 | 16.7909 | 16.5875 | 76.44s / 78.86s |
+
+Decision:
+- Promote the mechanism as the fixed development candidate because it improves
+  both target widths on the heldout selection board and the independent
+  WikiText2 confirmation board.
+- This is not enough evidence for a paper or SOTA claim. Do not tune the block
+  size or other mechanism parameters against either board.
+
+Next action:
+- Run the unchanged W3/W4 treatment under an alternate C4 calibration seed,
+  then validate it on a second model family before any broader comparison.
