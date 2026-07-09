@@ -1,0 +1,76 @@
+model:
+  repo_id: Qwen/Qwen3-4B
+  dtype: float16
+  trust_remote_code: false
+  local_files_only: false
+quantization:
+  bits: 3
+  group_size: 128
+  symmetric: true
+  scale_clip_search: greedy
+  search_objective: hybrid
+  output_error_rows: 64
+  output_error_weight: 0.5
+  hessian_error_weight: 1.0
+  awq_scale_normalization: geometric_mean
+  awq_min_scale: 0.125
+  awq_max_scale: 8.0
+  awq_alpha_candidates: [0.0, 0.0875, 0.125, 0.175, 0.2, 0.25]
+  clip_candidates: [0.8, 0.79, 0.78, 0.77]
+  scale_refinement: global_sketch
+  scale_refinement_steps: 3
+  tied_weight_strategy: joint_embedding
+  tied_embedding_error_weight: 1.0
+outliers:
+  enabled: false
+  strategy: protect
+  metric: hessian_weight
+  fraction: 0.0
+  protected_bits: 16
+sketch:
+  enabled: true
+  mode: diagonal_low_rank
+  rank: 64
+  max_rows_per_batch: 128
+  diagonal_floor: 0.000001
+  low_rank_weight: 0.25
+  low_rank_representation: nystrom
+  nystrom_eigenvalue_floor: 0.000001
+  normalize_error_terms: true
+adaptive:
+  enabled: false
+calibration:
+  source: dataset
+  dataset_name: allenai/c4
+  dataset_config: en
+  split: train
+  text_column: text
+  num_samples: 256
+  sequence_length: 2048
+  seed: 42
+  packing: true
+  batch_size: 8
+evaluation:
+  enabled: true
+  compare_original: true
+  benchmark_name: wikitext2_validation_packed_eval2048
+  use_calibration_data: false
+  source: dataset
+  dataset_name: Salesforce/wikitext
+  dataset_config: wikitext-2-raw-v1
+  split: validation
+  text_column: text
+  num_samples: null
+  sequence_length: 2048
+  packing: true
+  batch_size: 1
+  max_batches: null
+  measure_throughput: false
+output:
+  run_name: qwen3_4b_3bit_nystrom_global_refine_g128
+  output_dir: artifacts
+  save_model: false
+runtime:
+  device: auto
+  seed: 42
+  log_level: INFO
