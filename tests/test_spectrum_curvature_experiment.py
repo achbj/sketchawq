@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import subprocess
 from pathlib import Path
 
 import pytest
@@ -35,3 +36,45 @@ def test_nystrom_controls_preserve_the_strict_budget_protocol(bits: int) -> None
     assert nystrom.sketch.rank == control.sketch.rank == 64
     assert nystrom.sketch.low_rank_representation == "nystrom"
     assert nystrom.output.run_name == f"qwen3_4b_{bits}bit_nystrom_g128_control"
+
+
+def test_nystrom_launcher_dry_runs_both_bits() -> None:
+    result = subprocess.run(
+        [
+            str(PROJECT_ROOT / "scripts" / "run_spectrum_curvature_ablation.sh"),
+            "both",
+            "--gpu",
+            "A100",
+            "--dry-run",
+        ],
+        cwd=PROJECT_ROOT,
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+
+    assert "SKETCHAWQ_MODAL_GPU=A100" in result.stdout
+    assert "infra/modal/sketchawq_app.py" in result.stdout
+    assert "qwen3_4b_3bit_nystrom.yaml" in result.stdout
+    assert "qwen3_4b_4bit_nystrom.yaml" in result.stdout
+
+
+def test_nystrom_sync_dry_run_fetches_frozen_controls_and_new_rows() -> None:
+    result = subprocess.run(
+        [
+            str(PROJECT_ROOT / "scripts" / "sync_spectrum_curvature_ablation.sh"),
+            "both",
+            "--dry-run",
+        ],
+        cwd=PROJECT_ROOT,
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+
+    assert result.stdout.count("volume get") == 4
+    assert "qwen3_4b_3bit_strict_g128_control" in result.stdout
+    assert "qwen3_4b_3bit_nystrom_g128_control" in result.stdout
+    assert "qwen3_4b_4bit_strict_g128_control" in result.stdout
+    assert "qwen3_4b_4bit_nystrom_g128_control" in result.stdout
+    assert "sketchawq.experiments.compare_methods" in result.stdout
